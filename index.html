@@ -653,6 +653,31 @@
       border-top: 1px solid var(--doc-border);
     }
 
+    /* ── LISTEN BUTTON (TTS) ───────────────── */
+    .listen-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: var(--panel);
+      border: 1px solid var(--amber);
+      color: var(--amber-lit);
+      padding: 6px 14px;
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      letter-spacing: 1px;
+      cursor: pointer;
+      border-radius: 2px;
+      margin: 8px 0 4px;
+      transition: background 0.15s, color 0.15s;
+    }
+    .listen-btn:hover { background: #1a2a10; color: #ffe070; }
+    .listen-btn.speaking {
+      background: var(--amber);
+      color: #000;
+      border-color: var(--amber-lit);
+    }
+    .listen-btn.speaking:hover { background: var(--amber-lit); }
+
     /* ── SCROLLBAR ───────────────────────────── */
     ::-webkit-scrollbar { width: 7px; }
     ::-webkit-scrollbar-track { background: var(--dark); }
@@ -776,6 +801,73 @@ function isPdfReady() {
 }
 
 /* ==========================================================
+   TEXT-TO-SPEECH (TTS) — "Listen" buttons for accessibility
+   ========================================================== */
+let _ttsUtterance = null;
+let _ttsActiveBtn = null;
+
+function ttsStop() {
+  if (window.speechSynthesis) {
+    window.speechSynthesis.cancel();
+  }
+  if (_ttsActiveBtn) {
+    _ttsActiveBtn.classList.remove('speaking');
+    _ttsActiveBtn.innerHTML = '&#x1f50a; LISTEN';
+    _ttsActiveBtn = null;
+  }
+  _ttsUtterance = null;
+}
+
+function ttsSpeak(btn, text) {
+  if (!window.speechSynthesis) return;
+
+  // If this button is already speaking, stop it
+  if (_ttsActiveBtn === btn) {
+    ttsStop();
+    return;
+  }
+
+  // Stop any current speech
+  ttsStop();
+
+  // Clean text: strip HTML tags, decode entities, collapse whitespace
+  const clean = text
+    .replace(/<[^>]*>/g, ' ')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#x27;/g, "'")
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  _ttsUtterance = new SpeechSynthesisUtterance(clean);
+  _ttsUtterance.rate = 0.92;
+  _ttsUtterance.pitch = 1.0;
+
+  _ttsActiveBtn = btn;
+  btn.classList.add('speaking');
+  btn.innerHTML = '&#9632; STOP';
+
+  _ttsUtterance.onend = () => ttsStop();
+  _ttsUtterance.onerror = () => ttsStop();
+
+  window.speechSynthesis.speak(_ttsUtterance);
+}
+
+function listenBtn(targetId) {
+  return `<button class="listen-btn" onclick="ttsSpeak(this, document.getElementById('${targetId}').innerText)">&#x1f50a; LISTEN</button>`;
+}
+
+// Stop TTS when navigating between screens
+const _origSetRoot = setRoot;
+setRoot = function(html) {
+  ttsStop();
+  _origSetRoot(html);
+};
+
+/* ==========================================================
    TIMELINE
    ========================================================== */
 const DAYS = [
@@ -889,12 +981,13 @@ function renderPhase1() {
   setRoot(`
     <div class="ph-meta">TUESDAY, OCTOBER 16, 1962 &nbsp;—&nbsp; 11:45 AM &nbsp;—&nbsp; THE WHITE HOUSE, CABINET ROOM</div>
     <div class="ph-title">Phase One: The Discovery</div>
-    <div class="ph-context">
+    <div class="ph-context" id="ph1-context">
       CIA Director John McCone has summoned EXCOMM to an emergency meeting.
       Yesterday's U-2 reconnaissance flight over Cuba has produced photographs
       that have stunned the intelligence community. You have been handed three
       documents and asked to study them before the President arrives.
     </div>
+    ${listenBtn('ph1-context')}
 
     <!-- NPIC LAB PHOTO -->
     <div class="photo-wrap">
@@ -916,34 +1009,7 @@ function renderPhase1() {
       </div>
     </div>
 
-    <!-- DOCUMENT 1 -->
-    <div class="doc">
-      <div class="stamp">TOP SECRET</div>
-      <div class="doc-head">
-        <div class="doc-cls">TOP SECRET — UMBRA</div>
-        <div class="doc-meta">
-          <span>FROM: John A. McCone, Director of Central Intelligence</span>
-          <span>TO: Executive Committee, National Security Council</span>
-          <span>DATE: October 16, 1962</span>
-          <span>SUBJECT: Special National Intelligence Estimate — Soviet Missiles in Cuba</span>
-        </div>
-      </div>
-      <div class="doc-body">
-        <p><strong>SUMMARY:</strong> Analysis of U-2 reconnaissance photographs taken on October 14, 1962, confirms the presence of Soviet medium-range ballistic missile (MRBM) sites under active construction in the San Cristóbal area of western Cuba.</p>
-        <p><strong>KEY FINDINGS:</strong></p>
-        <ul>
-          <li>Two confirmed MRBM launch sites identified — consistent with Soviet <em>SS-4 "Sandal"</em> missiles</li>
-          <li><strong>Range: approximately 1,100 nautical miles</strong> — puts Washington D.C., New York City, and Strategic Air Command headquarters at Offutt AFB, Nebraska within strike range</li>
-          <li>Sites are <strong>NOT yet operational.</strong> Missile erectors, fuel trucks, and oxidizer vehicles are visible and in active use</li>
-          <li>Estimated time to operational capability: <strong>10 to 14 days</strong></li>
-          <li>Soviet military personnel and Cuban construction workers are working continuously, day and night</li>
-          <li>Additional sites may exist. Complete photographic coverage of the island is ongoing</li>
-        </ul>
-        <p><strong>ASSESSMENT:</strong> The Soviet Union has covertly deployed offensive nuclear weapons to Cuba in direct violation of private assurances given to President Kennedy. This materially and dramatically alters the strategic balance in the Western Hemisphere. Immediate action at the highest level is required.</p>
-      </div>
-      <div class="doc-sig">— John A. McCone, Director of Central Intelligence, October 16, 1962</div>
-    </div>
-
+    <!-- U-2 RECONNAISSANCE PHOTOGRAPHS -->
     <!-- PHOTO 1 -->
     <div class="photo-wrap">
       <div class="photo-head">
@@ -1025,6 +1091,34 @@ function renderPhase1() {
       <div class="photo-caption">
         Strike radius assessment: SS-4 missiles currently under construction at San Cristóbal can reach Washington D.C. in approximately 13 minutes. If SS-5 intermediate-range missiles are also deployed, virtually the entire continental United States — including SAC headquarters at Offutt AFB, Nebraska — falls within range.
       </div>
+    </div>
+
+    <!-- DOCUMENT 1 — CIA INTELLIGENCE SUMMARY -->
+    <div class="doc">
+      <div class="stamp">TOP SECRET</div>
+      <div class="doc-head">
+        <div class="doc-cls">TOP SECRET — UMBRA</div>
+        <div class="doc-meta">
+          <span>FROM: John A. McCone, Director of Central Intelligence</span>
+          <span>TO: Executive Committee, National Security Council</span>
+          <span>DATE: October 16, 1962</span>
+          <span>SUBJECT: Special National Intelligence Estimate — Soviet Missiles in Cuba</span>
+        </div>
+      </div>
+      <div class="doc-body">
+        <p><strong>SUMMARY:</strong> Analysis of U-2 reconnaissance photographs taken on October 14, 1962, confirms the presence of Soviet medium-range ballistic missile (MRBM) sites under active construction in the San Cristóbal area of western Cuba.</p>
+        <p><strong>KEY FINDINGS:</strong></p>
+        <ul>
+          <li>Two confirmed MRBM launch sites identified — consistent with Soviet <em>SS-4 "Sandal"</em> missiles</li>
+          <li><strong>Range: approximately 1,100 nautical miles</strong> — puts Washington D.C., New York City, and Strategic Air Command headquarters at Offutt AFB, Nebraska within strike range</li>
+          <li>Sites are <strong>NOT yet operational.</strong> Missile erectors, fuel trucks, and oxidizer vehicles are visible and in active use</li>
+          <li>Estimated time to operational capability: <strong>10 to 14 days</strong></li>
+          <li>Soviet military personnel and Cuban construction workers are working continuously, day and night</li>
+          <li>Additional sites may exist. Complete photographic coverage of the island is ongoing</li>
+        </ul>
+        <p><strong>ASSESSMENT:</strong> The Soviet Union has covertly deployed offensive nuclear weapons to Cuba in direct violation of private assurances given to President Kennedy. This materially and dramatically alters the strategic balance in the Western Hemisphere. Immediate action at the highest level is required.</p>
+      </div>
+      <div class="doc-sig">— John A. McCone, Director of Central Intelligence, October 16, 1962</div>
     </div>
 
     <!-- DOCUMENT 2 — JOINT CHIEFS -->
@@ -1152,7 +1246,8 @@ function renderPhase2() {
   setRoot(`
     <div class="ph-meta">WEDNESDAY–FRIDAY, OCTOBER 17–19, 1962 &nbsp;—&nbsp; THE WHITE HOUSE</div>
     <div class="ph-title">Phase Two: The Debate</div>
-    <div class="ph-context">${content.context}</div>
+    <div class="ph-context" id="ph2-context">${content.context}</div>
+    ${listenBtn('ph2-context')}
 
     ${content.doc}
 
@@ -1219,7 +1314,8 @@ function renderPhase3() {
   setRoot(`
     <div class="ph-meta">MONDAY–THURSDAY, OCTOBER 22–25, 1962</div>
     <div class="ph-title">Phase Three: The Quarantine</div>
-    <div class="ph-context">${intro}</div>
+    <div class="ph-context" id="ph3-context">${intro}</div>
+    ${listenBtn('ph3-context')}
 
     <!-- KENNEDY ADDRESS — IMAGE + AUDIO -->
     <div class="audio-wrap">
@@ -1284,7 +1380,7 @@ function renderPhase3() {
         ▶ SOVIET B-59 — FOXTROT-CLASS &nbsp;|&nbsp; SURFACED UNDER U.S. NAVY PRESSURE &nbsp;|&nbsp; U.S. HELICOPTER OVERHEAD &nbsp;|&nbsp; ARMED WITH NUCLEAR TORPEDO
       </div>
       <div class="photo-caption">
-        Soviet submarine B-59 photographed at the moment of surfacing, forced up by U.S. Navy practice depth charges after 72+ hours submerged with no contact from Moscow. What U.S. forces did not know: B-59 was armed with a nuclear-tipped torpedo with a yield equivalent to the Hiroshima bomb. Commander Valentin Savitsky, convinced nuclear war had already begun, ordered the weapon armed. Only Fleet Commodore Vasili Arkhipov's refusal to authorize the launch prevented its use. The U.S. Navy helicopter visible overhead had no idea how close the world had just come.
+        Soviet submarine B-59 photographed at the moment of surfacing, forced up by U.S. Navy practice depth charges after 72+ hours submerged with no contact from Moscow. What U.S. forces did not know at the time: B-59 was armed with a nuclear-tipped torpedo with a yield equivalent to the Hiroshima bomb. The full story of what happened inside that submarine would not be revealed for decades.
       </div>
     </div>
 
@@ -1413,9 +1509,10 @@ function renderPhase4() {
   setRoot(`
     <div class="ph-meta">SATURDAY, OCTOBER 27, 1962 &nbsp;—&nbsp; "BLACK SATURDAY"</div>
     <div class="ph-title">Phase Four: The Brink</div>
-    <div class="ph-context">
+    <div class="ph-context" id="ph4-context">
       Everything is happening at once. An American U-2 reconnaissance aircraft has been shot down over Cuba by a Soviet surface-to-air missile. The pilot, Major Rudolf Anderson, is dead — the first American combat fatality of the crisis. A second U-2 has accidentally wandered into Soviet airspace over Alaska, scrambling Soviet MiG fighters. The Joint Chiefs are demanding retaliation. And then — two contradictory letters from Khrushchev arrive within 24 hours of each other, presenting an agonizing dilemma.
     </div>
+    ${listenBtn('ph4-context')}
 
     <!-- ANDERSON SHOOTDOWN REPORT -->
     <div class="doc">
@@ -1556,7 +1653,7 @@ const TRANSITIONS = {
   },
   '3A': {
     title: 'Full Enforcement Ordered',
-    text: `U.S. forces board the Soviet tanker Bucharest. Khrushchev publicly calls it "piracy" and threatens action in Berlin in retaliation. Unknown to EXCOMM, aboard Soviet submarine B-59, which has been depth-charged for hours and lost contact with Moscow, the commander believes nuclear war has already started and wants to arm his nuclear torpedo. Only the intervention of Fleet Commodore Vasili Arkhipov — who must give unanimous agreement — prevents a launch. A catastrophe is narrowly avoided. EXCOMM will not learn how close it came for thirty years.`
+    text: `U.S. forces board the Soviet tanker Bucharest. Khrushchev publicly calls it "piracy" and threatens action in Berlin in retaliation. Beneath the surface, the situation with Soviet submarine B-59 — which has been depth-charged for hours and lost all contact with Moscow — is reaching a crisis point that EXCOMM knows nothing about. Construction in Cuba has not paused. The quarantine is holding, but the pressure is building on all sides.`
   },
   '3B': {
     title: 'Measured Enforcement in Effect',
@@ -1576,8 +1673,16 @@ const TRANSITIONS = {
   },
   '4C': {
     title: 'Retaliation Authorized — Escalation',
-    text: `U.S. aircraft strike the SA-2 site that shot down Major Anderson's U-2. Soviet forces in Cuba prepare retaliatory fire on American aircraft. Aboard submarine B-59, which has been depth-charged for hours and lost contact with Moscow, Commander Savitsky believes nuclear war has begun and orders the nuclear torpedo armed. Fleet Commodore Vasili Arkhipov refuses to authorize the launch — the only thing standing between October 27th and nuclear exchange is one man's refusal to follow orders. Kennedy, shaken to his core, immediately halts further military action and accepts RFK's back-channel proposal.`
+    text: `U.S. aircraft strike the SA-2 site that shot down Major Anderson's U-2. Soviet forces in Cuba prepare retaliatory fire on American aircraft. The situation spirals to the absolute brink — events are unfolding beneath the ocean's surface that EXCOMM cannot see and will not learn about for decades. Kennedy, shaken by the speed of escalation, immediately halts further military action and accepts RFK's back-channel proposal with Dobrynin.`
   }
+};
+
+/* Historical choices Kennedy actually made */
+const HISTORICAL_CHOICES = {
+  1: { choice: 'B', label: 'Naval Quarantine', desc: 'Kennedy chose a naval quarantine — strong enough to confront the Soviets, restrained enough to avoid immediate war.' },
+  2: { choice: 'A', label: 'Naval Quarantine Announcement', desc: 'Kennedy announced the quarantine to the nation on October 22nd — firm but leaving room for negotiation.' },
+  3: { choice: 'B', label: 'Measured Enforcement', desc: 'Kennedy let tankers through and stopped only suspected military cargo — enforcing the quarantine without unnecessary provocation.' },
+  4: { choice: 'A', label: 'Trollope Ploy', desc: 'Kennedy responded only to Khrushchev\'s first, softer letter, while RFK secretly promised to remove the Turkey missiles. No retaliation for the U-2 shootdown.' }
 };
 
 function makeChoice(phase, choice) {
@@ -1593,13 +1698,19 @@ function makeChoice(phase, choice) {
 
   const key = `${phase}${choice}`;
   const tr = TRANSITIONS[key];
+  const hist = HISTORICAL_CHOICES[phase];
+  const matched = (choice === hist.choice);
 
   const nextScreens = { 1: 'phase2', 2: 'phase3', 3: 'phase4', 4: 'resolution' };
 
   state.transition = {
     title: tr.title,
     text: tr.text,
-    nextScreen: nextScreens[phase]
+    nextScreen: nextScreens[phase],
+    matched: matched,
+    histLabel: hist.label,
+    histDesc: hist.desc,
+    yourLabel: labelMap[phase][choice]
   };
 
   if (phase === 4) {
@@ -1617,11 +1728,31 @@ function renderTransitionScreen() {
   const tr = state.transition;
   const phase = Object.keys(state.choices).length;
   renderTimeline(phase);
+
+  let histBox = '';
+  if (tr.matched) {
+    histBox = `
+      <div style="max-width:680px; margin:0 auto 28px; padding:16px 20px; background:#0a1e0a; border:1px solid var(--green-mid); border-radius:3px; text-align:left;">
+        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--green-mid); letter-spacing:2px; margin-bottom:8px;">&#10003; YOU MATCHED HISTORY</div>
+        <div style="font-size:14px; color:var(--green-lit); line-height:1.7;">Your recommendation — <strong>${esc(tr.yourLabel)}</strong> — is exactly what Kennedy chose. ${tr.histDesc}</div>
+      </div>`;
+  } else {
+    histBox = `
+      <div style="max-width:680px; margin:0 auto 28px; padding:16px 20px; background:#1a1200; border:1px solid var(--amber); border-radius:3px; text-align:left;">
+        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--amber); letter-spacing:2px; margin-bottom:8px;">&#9888; YOU DIVERGED FROM HISTORY</div>
+        <div style="font-size:14px; color:var(--amber-lit); line-height:1.7; margin-bottom:8px;">You recommended: <strong>${esc(tr.yourLabel)}</strong></div>
+        <div style="font-size:14px; color:#7ab07a; line-height:1.7;">Kennedy actually chose: <strong>${esc(tr.histLabel)}</strong>. ${tr.histDesc}</div>
+        <div style="font-size:13px; color:var(--green-dim); margin-top:10px; font-style:italic;">The simulation continues based on your choice — you'll see how your alternative path plays out.</div>
+      </div>`;
+  }
+
   setRoot(`
     <div class="transition-screen">
       <div class="tr-meta">CONSEQUENCE — PHASE ${phase} CHOICE RECORDED</div>
       <div class="tr-title">${esc(tr.title)}</div>
-      <div class="tr-text">${tr.text}</div>
+      <div class="tr-text" id="tr-text">${tr.text}</div>
+      ${listenBtn('tr-text')}
+      ${histBox}
       <button class="continue-btn" onclick="advanceFromTransition()">▶ &nbsp; CONTINUE TO NEXT BRIEFING</button>
     </div>
   `);
@@ -1643,7 +1774,9 @@ const OUTCOMES = {
     text: `<p>On the morning of October 28th, Khrushchev's message came through Radio Moscow: the Soviet Union would dismantle and return its missiles from Cuba. The crisis was over.</p>
     <p>Your recommendations tracked closely with what Kennedy's EXCOMM actually chose. The naval quarantine bought time without committing an act of war. Responding only to Khrushchev's first, more personal letter — the Trollope Ploy — gave Khrushchev the face-saving exit he needed. The secret Turkey missile removal closed the deal, but this would not become public knowledge for decades.</p>
     <p>Secretary of State Dean Rusk turned to his colleagues and said: <em>"We're eyeball to eyeball, and I think the other fellow just blinked."</em></p>
-    <p><strong>What you may not know:</strong> At the height of the crisis, Soviet submarine B-59 — which had been depth-charged by U.S. destroyers for hours and had lost all radio contact with Moscow — was within minutes of launching a nuclear torpedo against American ships. Its commander, Captain Valentin Savitsky, believed nuclear war had already started. Only the refusal of Fleet Commodore Vasili Arkhipov to authorize the launch prevented a nuclear exchange. The world came closer to the end than almost anyone knew at the time.`,
+    <p><strong>What you did not know — and neither did EXCOMM:</strong> Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? Here is what was happening inside it. After being depth-charged for hours with no radio contact from Moscow, the submarine's commander — Captain Valentin Savitsky — became convinced that nuclear war had already begun on the surface. He ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
+    <p>Soviet naval regulations required the unanimous agreement of three senior officers to authorize a nuclear launch. Two agreed. The third — Fleet Commodore Vasili Arkhipov — refused. He argued they should surface and await orders from Moscow. He was overruled by the other two, shouted at, accused of cowardice. He still refused.</p>
+    <p><strong>One man's refusal, in the dark, under attack, believing the world was already at war — is the reason civilization continued.</strong> No one in the White House, the Pentagon, or the Kremlin knew this had happened. The story did not become public until Russian archives were opened in 2002, forty years later.</p>`,
     compare: `Kennedy chose the naval quarantine. He responded only to Khrushchev's first letter (Trollope Ploy). RFK privately promised Dobrynin the Turkey missiles would be removed in 6 months — secretly. Missiles were withdrawn from Cuba by November 1962. Turkey missiles quietly removed in April 1963.`
   },
   diplomatic: {
@@ -1652,17 +1785,19 @@ const OUTCOMES = {
     text: `<p>Your commitment to diplomacy and willingness to engage Soviet terms created an opening — but the resolution came slowly and with a political cost. The back-channel conversations and transparency with Khrushchev's demands produced a settlement that many at the time called too generous.</p>
     <p>The public announcement acknowledged a U.S. no-invasion pledge and Soviet missile withdrawal. The Turkey trade, accepted more openly than in the historical outcome, fueled accusations that Kennedy had bargained away NATO's security. Some European allies were furious they were not consulted.</p>
     <p>But the missiles were removed, no shots were fired at Cuba, and the world did not end. The crisis eventually produced one of its most lasting outcomes: the installation of a direct "hotline" between Washington and Moscow, so that future leaders would never have to communicate through formal diplomatic cables in moments when hours — or minutes — counted.</p>
-    <p><strong>What you may not know:</strong> While you were negotiating, Soviet submarine B-59 was being depth-charged in the Atlantic, its crew convinced nuclear war had started. One officer's refusal to authorize a nuclear torpedo launch was the only thing standing between diplomacy and catastrophe.`,
+    <p><strong>What you did not know — and neither did EXCOMM:</strong> Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? While you were pursuing diplomacy, the crew of that submarine — depth-charged for hours with no contact from Moscow — believed nuclear war had already begun. Captain Valentin Savitsky ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
+    <p>Soviet naval regulations required three officers to unanimously agree. Two did. The third — Fleet Commodore Vasili Arkhipov — refused. He was shouted at, accused of cowardice. He still said no. He insisted they surface and await orders.</p>
+    <p><strong>One man's refusal, in the dark, under attack, is the reason your diplomatic efforts had time to work at all.</strong> No one in the White House knew. The story did not become public until 2002.</p>`,
     compare: `Kennedy chose the naval quarantine and the Trollope Ploy. The Turkey missiles were removed secretly, not publicly. Resolution came on October 28th. Your more diplomatic choices created a slightly different path to the same destination.`
   },
   escalation: {
     badge: 'OUTCOME: ESCALATION PATH — CRISIS AT THE BRINK',
     title: 'October 27–28, 1962 — The Edge of the Abyss',
     text: `<p>Your aggressive recommendations brought the United States and Soviet Union to the very brink of nuclear exchange. What happened next was not strategy — it was luck.</p>
-    <p>Aboard Soviet submarine B-59, which had been depth-charged for hours and had completely lost radio contact with Moscow, Commander Valentin Savitsky was convinced nuclear war had already begun. He ordered the submarine's nuclear torpedo armed and prepared for launch. The torpedo, if fired, would have destroyed several American destroyers and triggered immediate nuclear retaliation.</p>
-    <p>Fleet Commodore Vasili Arkhipov — the only officer aboard who could veto the launch — refused to authorize it. One man, in the dark, under depth charge attack, believing the world was already at war, said no. That refusal is why civilization continued.</p>
+    <p><strong>What you did not know — and neither did EXCOMM:</strong> Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? Your aggressive choices pushed that submarine's crew past the breaking point. After being depth-charged for hours with no radio contact from Moscow, Captain Valentin Savitsky became convinced nuclear war had already begun. He ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
+    <p>Soviet naval regulations required three officers to unanimously agree. Two did. The third — Fleet Commodore Vasili Arkhipov — refused. He was shouted at, accused of cowardice, told the war had already started. He still said no. He insisted they surface and await orders from Moscow.</p>
     <p>Kennedy, confronted with just how close the edge was, overruled General LeMay and accepted RFK's back-channel deal with Dobrynin. On October 28th, Khrushchev announced the missiles would be dismantled. The Turkey missiles were secretly removed six months later.</p>
-    <p><strong>The world survived. But the margin was razor thin — and it had nothing to do with strategy. It was one Soviet naval officer choosing not to fire.</strong>`,
+    <p><strong>The world survived. But the margin was razor thin — and it had nothing to do with strategy. It was one Soviet naval officer, in the dark, under attack, choosing not to fire.</strong> No one in the White House knew. The story did not become public until Russian archives were opened in 2002.</p>`,
     compare: `Kennedy actually chose de-escalation at every critical juncture — naval quarantine, Trollope Ploy, no retaliation for the U-2 shootdown. Your more aggressive recommendations produced a more dangerous path to the same outcome, with a much smaller margin for survival.`
   }
 };
@@ -1688,10 +1823,11 @@ function renderResolution() {
     <div class="ph-title" style="font-size:20px; margin-bottom:16px;">${o.title}</div>
 
     <div class="doc">
-      <div class="doc-body" style="font-size:15px; line-height:1.9;">
+      <div class="doc-body" id="resolution-text" style="font-size:15px; line-height:1.9;">
         ${o.text}
       </div>
     </div>
+    ${listenBtn('resolution-text')}
 
     <div class="compare-box">
       <h3>YOUR ADVISORY RECORD</h3>
