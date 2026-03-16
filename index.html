@@ -695,6 +695,96 @@
     }
     .listen-btn.speaking:hover { background: var(--amber-lit); }
 
+    /* ── EXPLANATION MODAL ───────────────────── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 9999;
+      padding: 20px;
+    }
+
+    .modal-box {
+      background: var(--panel);
+      border: 2px solid var(--amber);
+      border-radius: 4px;
+      max-width: 600px;
+      width: 100%;
+      padding: 28px 24px;
+      box-shadow: 0 0 60px rgba(240,176,48,0.15);
+    }
+
+    .modal-label {
+      font-family: 'Courier New', monospace;
+      font-size: 11px;
+      color: var(--amber);
+      letter-spacing: 2px;
+      margin-bottom: 6px;
+    }
+
+    .modal-title {
+      font-size: 18px;
+      color: var(--green-lit);
+      margin-bottom: 6px;
+    }
+
+    .modal-choice {
+      font-size: 14px;
+      color: var(--amber-lit);
+      margin-bottom: 16px;
+      padding: 8px 12px;
+      background: #1a1200;
+      border-left: 3px solid var(--amber);
+    }
+
+    .modal-prompt {
+      font-size: 14px;
+      color: #7ab07a;
+      margin-bottom: 12px;
+      line-height: 1.7;
+    }
+
+    .modal-textarea {
+      width: 100%;
+      min-height: 120px;
+      background: var(--dark);
+      border: 1px solid var(--green-dim);
+      color: var(--green-lit);
+      padding: 12px;
+      font-family: Georgia, serif;
+      font-size: 14px;
+      line-height: 1.6;
+      outline: none;
+      resize: vertical;
+      border-radius: 2px;
+      margin-bottom: 14px;
+    }
+    .modal-textarea:focus { border-color: var(--amber); }
+    .modal-textarea::placeholder { color: var(--green-dim); font-style: italic; }
+
+    .modal-submit {
+      background: #1a3a1a;
+      border: 1px solid var(--green-mid);
+      color: var(--green-lit);
+      padding: 11px 28px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      letter-spacing: 2px;
+      cursor: pointer;
+      border-radius: 2px;
+    }
+    .modal-submit:hover { background: #244a24; }
+
+    .modal-err {
+      color: #e06050;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+
     /* ── SCROLLBAR ───────────────────────────── */
     ::-webkit-scrollbar { width: 7px; }
     ::-webkit-scrollbar-track { background: var(--dark); }
@@ -734,9 +824,10 @@ const state = {
   screen: 'intro',
   choices: {},        // phase (1-4) -> 'A' | 'B' | 'C'
   choiceLabels: {},   // phase -> short label for summary
-  transition: null,   // { title, text, nextScreen }
-  outcome: '',        // 'historical' | 'diplomatic' | 'escalation'
-  rationale: ''
+  explanations: {},   // phase -> student's typed explanation for their choice
+  transition: null,   // { phase, nextScreen }
+  rationale: '',
+  comprehension: ''
 };
 
 const STORAGE_KEY = 'excomm_state_v1';
@@ -750,9 +841,10 @@ function persistState() {
       screen: state.screen,
       choices: state.choices,
       choiceLabels: state.choiceLabels,
+      explanations: state.explanations,
       transition: state.transition,
-      outcome: state.outcome,
-      rationale: state.rationale
+      rationale: state.rationale,
+      comprehension: state.comprehension
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch (err) {
@@ -776,9 +868,10 @@ function loadPersistedState() {
       screen: data.screen || 'intro',
       choices: data.choices ? { ...data.choices } : {},
       choiceLabels: data.choiceLabels ? { ...data.choiceLabels } : {},
+      explanations: data.explanations ? { ...data.explanations } : {},
       transition: data.transition || null,
-      outcome: data.outcome || '',
-      rationale: data.rationale || ''
+      rationale: data.rationale || '',
+      comprehension: data.comprehension || ''
     });
   } catch (err) {
     console.warn('Unable to load saved simulation progress.', err);
@@ -947,26 +1040,6 @@ function confirmRestart() {
   if (confirm('Restart the simulation? All choices and progress will be cleared.')) {
     resetSim();
   }
-}
-
-/* ==========================================================
-   OUTCOME CALCULATION
-   ========================================================== */
-function calculateOutcome() {
-  const c = state.choices;
-  let agg = 0;
-  let dip = 0;
-  if (c[1] === 'A') agg += 2;
-  if (c[1] === 'C') dip += 2;
-  if (c[2] === 'B') agg += 2;
-  if (c[2] === 'C') dip += 1;
-  if (c[3] === 'A') agg += 1;
-  if (c[3] === 'C') dip += 1;
-  if (c[4] === 'C') agg += 3;
-  if (c[4] === 'B') dip += 1;
-  if (agg >= 4) return 'escalation';
-  if (dip >= 3 && agg <= 1) return 'diplomatic';
-  return 'historical';
 }
 
 /* ==========================================================
@@ -1220,87 +1293,55 @@ function renderPhase1() {
 /* ==========================================================
    PHASE 2 — OCT 17–19: THE DEBATE
    ========================================================== */
-const PHASE2_CONTENT = {
-  A: {
-    context: `Your recommendation for military action is noted. General LeMay is enthusiastic. But Secretary of Defense McNamara warns that even a "surgical" strike risks killing hundreds of Soviet military personnel — which could trigger Soviet retaliation against Berlin or American forces. Robert Kennedy is visibly shaken: "We'd be doing to Cuba what Japan did to us at Pearl Harbor." The debate rages for three days as EXCOMM meets secretly in the Cabinet Room. Meanwhile, U-2 flights confirm construction is accelerating — the Soviets know the secret cannot hold much longer.`,
-    doc: `
-      <div class="doc">
-        <div class="stamp">TOP SECRET</div>
-        <div class="doc-head">
-          <div class="doc-cls">TOP SECRET — EXCOMM MEETING TRANSCRIPT (EXCERPT)</div>
-          <div class="doc-meta">
-            <span>DATE: October 18, 1962 — Cabinet Room, The White House</span>
-            <span>NOTE: This transcript is based on secret tape recordings made by President Kennedy</span>
-          </div>
-        </div>
-        <div class="doc-body">
-          <p><strong>McNAMARA:</strong> "Mr. President, an air strike on the scale the Joint Chiefs recommend would almost certainly kill Soviet military personnel. We could be triggering the very war we're trying to prevent. There is no such thing as a surgical option here."</p>
-          <p><strong>TAYLOR:</strong> "With respect, Mr. Secretary — inaction guarantees that Cuba becomes a nuclear platform aimed at thirty American cities. We have a two-week window before those missiles are armed and ready."</p>
-          <p><strong>LeMay:</strong> "The blockade alone is worse than appeasement at Munich. If the President does nothing more than a blockade, it will be seen around the world as weakness. We've got Khrushchev over a barrel."</p>
-          <p><strong>R. KENNEDY:</strong> "We should also think about what comes after. If we launch air strikes, what happens in Berlin? What happens in Turkey? We need to think about the second and third moves, not just the first."</p>
-          <p><strong>KENNEDY:</strong> "Gentlemen — I will make the decision. I need real options and honest assessments, not certainties that don't exist. What is our plan for the morning of Day Two — whatever Day One looks like?"</p>
-        </div>
-      </div>`
-  },
-  B: {
-    context: `Your recommendation for a quarantine has gained momentum. McNamara backs it strongly; Secretary of State Rusk sees it as legally defensible. The legal team notes it must be called a "quarantine" rather than a "blockade" — under international law, a blockade is technically an act of war. Details must be worked out: How far from Cuba? Which ships get stopped? What happens if a Soviet captain refuses to halt? Meanwhile, the Joint Chiefs are furious, and construction in Cuba accelerates.`,
-    doc: `
-      <div class="doc">
-        <div class="stamp">TOP SECRET</div>
-        <div class="doc-head">
-          <div class="doc-cls">TOP SECRET — STATE DEPARTMENT MEMORANDUM</div>
-          <div class="doc-meta">
-            <span>FROM: Legal Adviser Abram Chayes, Dept. of State</span>
-            <span>TO: Secretary of State Dean Rusk</span>
-            <span>DATE: October 19, 1962</span>
-            <span>SUBJECT: Legal Basis for a Naval Quarantine</span>
-          </div>
-        </div>
-        <div class="doc-body">
-          <p>A naval "quarantine" — carefully distinguished from a "blockade" — can be legally justified under the Charter of the Organization of American States (OAS), Article 6 and 8, which authorize collective measures in response to threats to hemisphere security.</p>
-          <p>We recommend invoking the OAS rather than the UN Security Council, where the Soviet veto would block any resolution. The quarantine line should be established at 500 nautical miles from Cuba to allow maximum reaction time.</p>
-          <p><strong>Critical legal constraint:</strong> Under the quarantine, we may stop and inspect vessels but NOT fire upon them unless they refuse to comply and present an immediate threat. The quarantine applies to offensive weapons only — we cannot legally stop all Soviet shipping.</p>
-          <p>A Presidential Proclamation will be required. We can have a draft ready within 24 hours.</p>
-        </div>
-        <div class="doc-sig">— Abram Chayes, Legal Adviser, Department of State</div>
-      </div>`
-  },
-  C: {
-    context: `Robert Kennedy contacted Soviet Ambassador Anatoly Dobrynin through a private back-channel. Dobrynin appeared genuinely surprised — he either does not know about the missiles, or is an exceptionally skilled actor. CIA analysis suggests Khrushchev may have kept this operation secret even from his own ambassador. The diplomatic channel is open, but the Soviets are not budging publicly. CIA photos confirm construction has not slowed by a single hour. The hawks in EXCOMM are growing dangerously impatient.`,
-    doc: `
-      <div class="doc">
-        <div class="stamp">EYES ONLY</div>
-        <div class="doc-head">
-          <div class="doc-cls">EYES ONLY — ATTORNEY GENERAL'S NOTES</div>
-          <div class="doc-meta">
-            <span>FROM: Robert F. Kennedy, Attorney General</span>
-            <span>TO: President Kennedy</span>
-            <span>DATE: October 18, 1962</span>
-            <span>SUBJECT: Private Meeting with Ambassador Dobrynin</span>
-          </div>
-        </div>
-        <div class="doc-body">
-          <p>I met with Ambassador Dobrynin informally at his residence this evening. I confronted him with our photographic evidence. His reaction appeared genuine — he seemed shaken and stated he had received no information about offensive missiles from Moscow. He may actually not know.</p>
-          <p>He repeated the official Soviet line: there are only "defensive" weapons in Cuba. When I showed him a description of what our analysts have identified, he went quiet for a long moment. He said he would "inquire with Moscow."</p>
-          <p><strong>My assessment:</strong> The back-channel is open and Dobrynin may be a useful conduit, but Khrushchev's circle in Moscow is making decisions Dobrynin is not party to. We should not expect the diplomatic channel alone to resolve this.</p>
-          <p>Dean Rusk told me privately after the meeting: <em>"Every day the missiles get closer to operational. We cannot give the Soviets time to present us with a fait accompli."</em></p>
-        </div>
-        <div class="doc-sig">— Robert F. Kennedy, Attorney General, October 18, 1962</div>
-      </div>`
-  }
-};
-
 function renderPhase2() {
   renderTimeline(2);
-  const c1 = state.choices[1];
-  const content = PHASE2_CONTENT[c1];
   setRoot(`
     <div class="ph-meta">WEDNESDAY–FRIDAY, OCTOBER 17–19, 1962 &nbsp;—&nbsp; THE WHITE HOUSE</div>
     <div class="ph-title">Phase Two: The Debate</div>
-    <div class="ph-context" id="ph2-context">${content.context}</div>
+    <div class="ph-context" id="ph2-context">
+      For three days, EXCOMM meets in grueling, secret sessions in the Cabinet Room. Outside, the country goes about its ordinary life — no one knows. Inside, the arguments rage. The Joint Chiefs push for air strikes and invasion. McNamara argues for a naval blockade. Robert Kennedy warns that a surprise attack on Cuba would make America "the Tojo of the 1960s." Kennedy secretly tape-records the meetings. Meanwhile, U-2 flights confirm construction is accelerating — the Soviets know the secret cannot hold much longer.
+    </div>
     ${listenBtn('ph2-context')}
 
-    ${content.doc}
+    <!-- EXCOMM MEETING TRANSCRIPT -->
+    <div class="doc">
+      <div class="stamp">TOP SECRET</div>
+      <div class="doc-head">
+        <div class="doc-cls">TOP SECRET — EXCOMM MEETING TRANSCRIPT (EXCERPT)</div>
+        <div class="doc-meta">
+          <span>DATE: October 18, 1962 — Cabinet Room, The White House</span>
+          <span>NOTE: This transcript is based on secret tape recordings made by President Kennedy</span>
+        </div>
+      </div>
+      <div class="doc-body">
+        <p><strong>McNAMARA:</strong> "Mr. President, an air strike on the scale the Joint Chiefs recommend would almost certainly kill Soviet military personnel. We could be triggering the very war we're trying to prevent. There is no such thing as a surgical option here."</p>
+        <p><strong>TAYLOR:</strong> "With respect, Mr. Secretary — inaction guarantees that Cuba becomes a nuclear platform aimed at thirty American cities. We have a two-week window before those missiles are armed and ready."</p>
+        <p><strong>LeMay:</strong> "The blockade alone is worse than appeasement at Munich. If the President does nothing more than a blockade, it will be seen around the world as weakness. We've got Khrushchev over a barrel."</p>
+        <p><strong>R. KENNEDY:</strong> "We should also think about what comes after. If we launch air strikes, what happens in Berlin? What happens in Turkey? We need to think about the second and third moves, not just the first."</p>
+        <p><strong>KENNEDY:</strong> "Gentlemen — I will make the decision. I need real options and honest assessments, not certainties that don't exist. What is our plan for the morning of Day Two — whatever Day One looks like?"</p>
+      </div>
+    </div>
+
+    <!-- STATE DEPARTMENT LEGAL MEMO -->
+    <div class="doc">
+      <div class="stamp">TOP SECRET</div>
+      <div class="doc-head">
+        <div class="doc-cls">TOP SECRET — STATE DEPARTMENT MEMORANDUM</div>
+        <div class="doc-meta">
+          <span>FROM: Legal Adviser Abram Chayes, Dept. of State</span>
+          <span>TO: Secretary of State Dean Rusk</span>
+          <span>DATE: October 19, 1962</span>
+          <span>SUBJECT: Legal Basis for a Naval Quarantine</span>
+        </div>
+      </div>
+      <div class="doc-body">
+        <p>A naval "quarantine" — carefully distinguished from a "blockade" — can be legally justified under the Charter of the Organization of American States (OAS), Article 6 and 8, which authorize collective measures in response to threats to hemisphere security.</p>
+        <p>We recommend invoking the OAS rather than the UN Security Council, where the Soviet veto would block any resolution. The quarantine line should be established at 500 nautical miles from Cuba to allow maximum reaction time.</p>
+        <p><strong>Critical legal constraint:</strong> Under the quarantine, we may stop and inspect vessels but NOT fire upon them unless they refuse to comply and present an immediate threat. The quarantine applies to offensive weapons only — we cannot legally stop all Soviet shipping.</p>
+        <p>A Presidential Proclamation will be required. We can have a draft ready within 24 hours.</p>
+      </div>
+      <div class="doc-sig">— Abram Chayes, Legal Adviser, Department of State</div>
+    </div>
 
     <!-- Kennedy's Speech Decision -->
     <div class="doc">
@@ -1346,26 +1387,14 @@ function renderPhase2() {
 /* ==========================================================
    PHASE 3 — OCT 22–25: THE QUARANTINE
    ========================================================== */
-const PHASE3_CONTENT = {
-  A: {
-    intro: `Kennedy's speech on the evening of October 22nd shocks the nation and the world. He reveals the Soviet missiles to the American public and announces a naval quarantine. "The purpose of these bases," Kennedy declares, "can be none other than to provide a nuclear strike capability against the Western Hemisphere." The quarantine line is drawn 500 miles from Cuba. NATO allies are supportive. Khrushchev publicly calls the quarantine "piracy" and "a gross violation of international law." Soviet ships continue toward Cuba.`
-  },
-  B: {
-    intro: `The 24-hour ultimatum triggers panic across three continents. NATO allies — not consulted before the announcement — are alarmed. The British Prime Minister privately tells his cabinet that Kennedy may have "gone too far." Khrushchev tells his advisors the ultimatum is either a bluff or the act of a man willing to risk nuclear war. The Joint Chiefs declare DEFCON 2 — the highest peacetime readiness in American history. Soviet ships continue steaming toward Cuba. The clock is running.`
-  },
-  C: {
-    intro: `Kennedy's request for UN mediation draws a mixed international response. U Thant, the UN Secretary-General, immediately proposes that both sides suspend confrontational moves for two weeks while negotiations proceed. Khrushchev tentatively accepts. But construction in Cuba continues at full pace — the missiles may be operational before any agreement is reached. Congressional leaders from both parties are furious, calling the President weak. The Joint Chiefs are threatening to take their objections public.`
-  }
-};
-
 function renderPhase3() {
   renderTimeline(3);
-  const c2 = state.choices[2];
-  const intro = PHASE3_CONTENT[c2].intro;
   setRoot(`
     <div class="ph-meta">MONDAY–THURSDAY, OCTOBER 22–25, 1962</div>
     <div class="ph-title">Phase Three: The Quarantine</div>
-    <div class="ph-context" id="ph3-context">${intro}</div>
+    <div class="ph-context" id="ph3-context">
+      Kennedy's speech on the evening of October 22nd shocks the nation and the world. He reveals the Soviet missiles to the American public and announces a naval quarantine. "The purpose of these bases," Kennedy declares, "can be none other than to provide a nuclear strike capability against the Western Hemisphere." The quarantine line is drawn 500 miles from Cuba. The U.S. military goes to DEFCON 2 — the highest peacetime readiness in American history. Nuclear-armed B-52 bombers are airborne around the clock. NATO allies are supportive. Khrushchev publicly calls the quarantine "piracy" and "a gross violation of international law." Soviet ships continue toward Cuba.
+    </div>
     ${listenBtn('ph3-context')}
 
     <!-- KENNEDY ADDRESS — IMAGE + AUDIO -->
@@ -1675,136 +1704,135 @@ function renderPhase4() {
 }
 
 /* ==========================================================
-   MAKE A CHOICE
+   MAKE A CHOICE — MODAL + TRANSITION
    ========================================================== */
-const TRANSITIONS = {
-  '1A': {
-    title: 'Military Action Recommended',
-    text: `Your recommendation for air strikes is noted. General LeMay is enthusiastic — "Finally, someone talking sense." Secretary McNamara is deeply troubled. Robert Kennedy turns to you and says quietly: "If we go in shooting, we may not be able to stop." The debate continues for three agonizing days. Construction crews in Cuba work around the clock under floodlights. The missiles edge closer to operational status. Kennedy has not yet made his decision — but every hour matters.`
+const LABEL_MAP = {
+  1: { A: 'Air Strikes', B: 'Naval Quarantine', C: 'Secret Diplomacy' },
+  2: { A: 'Naval Quarantine Announcement', B: '24-Hour Ultimatum', C: 'UN Mediation Request' },
+  3: { A: 'Full Quarantine Enforcement', B: 'Measured Enforcement', C: 'UN Standdown' },
+  4: { A: 'Trollope Ploy', B: 'Public Turkey Trade', C: 'Retaliate for U-2 Shootdown' }
+};
+
+const HISTORICAL = {
+  1: { choice: 'B', label: 'Naval Quarantine' },
+  2: { choice: 'A', label: 'Naval Quarantine Announcement' },
+  3: { choice: 'B', label: 'Measured Enforcement' },
+  4: { choice: 'A', label: 'Trollope Ploy (respond to Letter 1 only + secret Turkey deal)' }
+};
+
+const WHAT_HAPPENED = {
+  1: {
+    title: 'What Kennedy Actually Did — Phase 1',
+    text: `Kennedy listened to all sides but chose <strong>the naval quarantine</strong> — Option B. He rejected the Joint Chiefs' demand for air strikes, telling his brother Bobby: "If we go in and strike these sites, we may end up starting the very war we're trying to prevent." But he also rejected pure diplomacy alone — the missiles were being built too fast. The quarantine was strong enough to confront Khrushchev, but restrained enough to avoid killing Soviet personnel. It kept every option on the table while buying time. The debate continued in secret for three more days while the country went about its ordinary life, unaware of the crisis being decided above them.`
   },
-  '1B': {
-    title: 'Quarantine Recommended',
-    text: `Your recommendation for a naval quarantine gains traction. McNamara immediately backs it. Kennedy appears to favor it — it creates pressure without crossing the line into open war. But General LeMay is incandescent: "Mr. President, this is worse than Munich. We're flinching." The Joint Chiefs formally request a meeting to push for military action. For three days, EXCOMM debates in secret while the country goes about its ordinary life, unaware of the crisis being decided above them.`
+  2: {
+    title: 'What Kennedy Actually Did — Phase 2',
+    text: `Kennedy chose <strong>Option A — the naval quarantine announcement</strong>. On the evening of October 22nd, he addressed the nation on live television, revealing the Soviet missiles for the first time and announcing the quarantine. He warned that any nuclear missile launched from Cuba would be "regarded as an attack by the Soviet Union on the United States, requiring a full retaliatory response upon the Soviet Union." He did not issue an ultimatum or a deadline — he left room for Khrushchev to find a way out. He did not go to the UN first — he acted decisively, then briefed allies. The Kremlin was silent for five hours after the speech. The world went to bed that night not knowing if morning would come.`
   },
-  '1C': {
-    title: 'Secret Diplomacy Recommended',
-    text: `RFK quietly contacts Soviet Ambassador Dobrynin through a back-channel. Dobrynin appears shaken — he may genuinely not know. But CIA photos confirm construction has not paused for a single hour. Dean Rusk leans over to you: "Every day we wait, those missiles get closer to ready. Khrushchev isn't going to call us and offer to pack up and go home." The diplomatic channel is open, but time is not on our side. Kennedy must decide how long he can wait.`
+  3: {
+    title: 'What Kennedy Actually Did — Phase 3',
+    text: `Kennedy chose <strong>Option B — measured enforcement</strong>. He allowed the Soviet tanker <em>Bucharest</em> through after visual inspection — it was carrying petroleum, not weapons. He stopped and boarded only the <em>Marucla</em>, a dry-cargo ship suspected of carrying military equipment. The Joint Chiefs were furious. General LeMay called it weakness. But Kennedy understood something critical: the purpose of the quarantine was not to sink Soviet ships — it was to signal American resolve while giving Khrushchev time to reconsider. And it worked. Of 25 Soviet ships originally headed for Cuba, 16 turned back. Secretary of State Dean Rusk turned to his colleagues: <em>"We're eyeball to eyeball, and I think the other fellow just blinked."</em>`
   },
-  '2A': {
-    title: 'Quarantine Announced — October 22',
-    text: `Kennedy's speech on the evening of October 22nd stuns the nation. For the first time, the American public sees the Soviet missiles on television. Kennedy announces the quarantine and warns that any nuclear missile launched from Cuba will be "regarded as an attack by the Soviet Union on the United States, requiring a full retaliatory response upon the Soviet Union." The Kremlin is silent for five hours. The world goes to bed not knowing if morning will come.`
-  },
-  '2B': {
-    title: 'Ultimatum Delivered — October 22',
-    text: `The 24-hour ultimatum sends shock waves around the world. NATO allies are alarmed they were not consulted. The British Prime Minister says privately Kennedy has "gone too far." Khrushchev tells his inner circle the ultimatum is either a bluff or the act of a reckless man. Soviet ships continue steaming toward Cuba. DEFCON 2 is declared across all U.S. forces — nuclear bombers are in the air. The clock is running.`
-  },
-  '2C': {
-    title: 'UN Mediation Requested — October 22',
-    text: `Kennedy's appeal to the UN buys international goodwill but costs him politically at home. Both Republican and Democratic Congressional leaders demand stronger action. UN Secretary-General U Thant immediately proposes a two-week standdown. Khrushchev tentatively accepts. But CIA photo analysts report that Cuban construction crews are working 24 hours a day by floodlight — the missiles could be operational within the two-week window. The situation is a race against time.`
-  },
-  '3A': {
-    title: 'Full Enforcement Ordered',
-    text: `U.S. forces board the Soviet tanker Bucharest. Khrushchev publicly calls it "piracy" and threatens action in Berlin in retaliation. Beneath the surface, the situation with Soviet submarine B-59 — which has been depth-charged for hours and lost all contact with Moscow — is reaching a crisis point that EXCOMM knows nothing about. Construction in Cuba has not paused. The quarantine is holding, but the pressure is building on all sides.`
-  },
-  '3B': {
-    title: 'Measured Enforcement in Effect',
-    text: `Kennedy's decision to allow tankers through while stopping military cargo ships is criticized by hawks — but it works. Soviet ships carrying military equipment have already turned back. The quarantine is holding without unnecessary provocation. Construction in Cuba continues, but no new missiles are getting through. Time is running out, but the situation has not escalated. Khrushchev, in private cables, signals he may be reconsidering.`
-  },
-  '3C': {
-    title: 'Standdown Ordered — UN Mediation Attempt',
-    text: `U.S. forces pull back to support U Thant's proposal. Khrushchev claims this proves American weakness. Soviet ships resume course. One cargo ship, the Kimovsk — suspected of carrying missile components — passes through the quarantine zone during the standdown. Construction in Cuba shows no signs of slowing. Kennedy receives furious phone calls from Congressional leaders and the Joint Chiefs. The clock is running and the ground has shifted beneath the negotiating table.`
-  },
-  '4A': {
-    title: 'The Trollope Ploy — Waiting for Khrushchev',
-    text: `Kennedy sends a formal reply to Khrushchev's first letter only, accepting its terms — a U.S. no-invasion pledge in exchange for Soviet missile withdrawal. Letter 2 is officially ignored. RFK meets privately with Dobrynin and conveys the secret Turkey assurance. The message is sent. Now the only question is: will Khrushchev accept the exit ramp being offered to him?`
-  },
-  '4B': {
-    title: 'Turkey Trade Offer Made Public',
-    text: `Kennedy publicly announces that the U.S. will remove its Jupiter missiles from Turkey as part of a formal agreement. NATO allies are immediately alarmed — they were not consulted. Some accuse Kennedy of selling out NATO's eastern flank. Khrushchev, surprised by the public offer, pauses. The offer is on the table. The world watches.`
-  },
-  '4C': {
-    title: 'Retaliation Authorized — Escalation',
-    text: `U.S. aircraft strike the SA-2 site that shot down Major Anderson's U-2. Soviet forces in Cuba prepare retaliatory fire on American aircraft. The situation spirals to the absolute brink — events are unfolding beneath the ocean's surface that EXCOMM cannot see and will not learn about for decades. Kennedy, shaken by the speed of escalation, immediately halts further military action and accepts RFK's back-channel proposal with Dobrynin.`
+  4: {
+    title: 'What Kennedy Actually Did — Phase 4',
+    text: `Kennedy chose <strong>Option A — the Trollope Ploy</strong>. Despite enormous pressure to retaliate for Major Anderson's death, he did not strike the SAM site. Despite the Joint Chiefs demanding escalation, he held firm. He responded publicly only to Khrushchev's first, more personal letter — the one that asked simply for a no-invasion pledge — and ignored the second letter's demand for a public Turkey trade. Simultaneously, RFK met secretly with Ambassador Dobrynin and told him: the Jupiter missiles in Turkey would be removed within 4–6 months, but this could <em>never</em> be made public. If it leaked, the deal was off. This gave Khrushchev a face-saving exit. On the morning of October 28th, Radio Moscow broadcast Khrushchev's response: the Soviet Union would dismantle and remove its missiles from Cuba. The crisis was over.`
   }
 };
 
-/* Historical choices Kennedy actually made */
-const HISTORICAL_CHOICES = {
-  1: { choice: 'B', label: 'Naval Quarantine', desc: 'Kennedy chose a naval quarantine — strong enough to confront the Soviets, restrained enough to avoid immediate war.' },
-  2: { choice: 'A', label: 'Naval Quarantine Announcement', desc: 'Kennedy announced the quarantine to the nation on October 22nd — firm but leaving room for negotiation.' },
-  3: { choice: 'B', label: 'Measured Enforcement', desc: 'Kennedy let tankers through and stopped only suspected military cargo — enforcing the quarantine without unnecessary provocation.' },
-  4: { choice: 'A', label: 'Trollope Ploy', desc: 'Kennedy responded only to Khrushchev\'s first, softer letter, while RFK secretly promised to remove the Turkey missiles. No retaliation for the U-2 shootdown.' }
-};
+let _pendingChoice = null; // { phase, choice }
 
 function makeChoice(phase, choice) {
+  _pendingChoice = { phase, choice };
   state.choices[phase] = choice;
+  state.choiceLabels[phase] = LABEL_MAP[phase][choice];
+  persistState();
 
-  const labelMap = {
-    1: { A: 'Air Strikes', B: 'Naval Quarantine', C: 'Secret Diplomacy' },
-    2: { A: 'Naval Quarantine Announcement', B: '24-Hour Ultimatum', C: 'UN Mediation Request' },
-    3: { A: 'Full Quarantine Enforcement', B: 'Measured Enforcement', C: 'UN Standdown' },
-    4: { A: 'Trollope Ploy', B: 'Public Turkey Trade', C: 'Retaliate for U-2 Shootdown' }
-  };
-  state.choiceLabels[phase] = labelMap[phase][choice];
+  // Show explanation modal
+  const label = LABEL_MAP[phase][choice];
+  const overlay = document.createElement('div');
+  overlay.className = 'modal-overlay';
+  overlay.id = 'explanation-modal';
+  overlay.innerHTML = `
+    <div class="modal-box">
+      <div class="modal-label">DECISION RECORDED — PHASE ${phase}</div>
+      <div class="modal-title">Explain Your Reasoning</div>
+      <div class="modal-choice">Your recommendation: <strong>${esc(label)}</strong></div>
+      <div class="modal-prompt">In 2–3 sentences, explain <em>why</em> you chose this option. What factors from the documents influenced your decision?</div>
+      <div id="modal-err" class="modal-err"></div>
+      <textarea class="modal-textarea" id="modal-explanation" placeholder="I chose this because..."></textarea>
+      <button class="modal-submit" onclick="submitExplanation()">▶ &nbsp; SUBMIT &amp; SEE WHAT ACTUALLY HAPPENED</button>
+    </div>
+  `;
+  document.body.appendChild(overlay);
+  document.getElementById('modal-explanation').focus();
+}
 
-  const key = `${phase}${choice}`;
-  const tr = TRANSITIONS[key];
-  const hist = HISTORICAL_CHOICES[phase];
-  const matched = (choice === hist.choice);
-
-  const nextScreens = { 1: 'phase2', 2: 'phase3', 3: 'phase4', 4: 'resolution' };
-
-  state.transition = {
-    title: tr.title,
-    text: tr.text,
-    nextScreen: nextScreens[phase],
-    matched: matched,
-    histLabel: hist.label,
-    histDesc: hist.desc,
-    yourLabel: labelMap[phase][choice]
-  };
-
-  if (phase === 4) {
-    state.outcome = calculateOutcome();
+function submitExplanation() {
+  const text = document.getElementById('modal-explanation').value.trim();
+  if (text.length < 15) {
+    document.getElementById('modal-err').textContent = '⚠ Please write at least a couple sentences explaining your reasoning.';
+    return;
   }
 
+  const phase = _pendingChoice.phase;
+  state.explanations[phase] = text;
+
+  // Remove modal
+  const modal = document.getElementById('explanation-modal');
+  if (modal) modal.remove();
+
+  // Go to transition screen
+  const nextScreens = { 1: 'phase2', 2: 'phase3', 3: 'phase4', 4: 'resolution' };
+  state.transition = { phase: phase, nextScreen: nextScreens[phase] };
   state.screen = 'transition';
+  _pendingChoice = null;
   render();
 }
 
 /* ==========================================================
-   TRANSITION SCREEN
+   TRANSITION SCREEN — "WHAT ACTUALLY HAPPENED"
    ========================================================== */
 function renderTransitionScreen() {
   const tr = state.transition;
-  const phase = Object.keys(state.choices).length;
+  const phase = tr.phase;
+  const hist = HISTORICAL[phase];
+  const wh = WHAT_HAPPENED[phase];
+  const yourChoice = state.choices[phase];
+  const yourLabel = state.choiceLabels[phase];
+  const matched = (yourChoice === hist.choice);
+
   renderTimeline(phase);
 
-  let histBox = '';
-  if (tr.matched) {
-    histBox = `
-      <div style="max-width:680px; margin:0 auto 28px; padding:16px 20px; background:#0a1e0a; border:1px solid var(--green-mid); border-radius:3px; text-align:left;">
-        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--green-mid); letter-spacing:2px; margin-bottom:8px;">&#10003; YOU MATCHED HISTORY</div>
-        <div style="font-size:14px; color:var(--green-lit); line-height:1.7;">Your recommendation — <strong>${esc(tr.yourLabel)}</strong> — is exactly what Kennedy chose. ${tr.histDesc}</div>
+  let comparisonBox;
+  if (matched) {
+    comparisonBox = `
+      <div style="max-width:740px; margin:28px auto 0; padding:16px 20px; background:#0a1e0a; border:1px solid var(--green-mid); border-radius:3px; text-align:left;">
+        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--green-mid); letter-spacing:2px; margin-bottom:8px;">&#10003; YOUR RECOMMENDATION MATCHED HISTORY</div>
+        <div style="font-size:14px; color:var(--green-lit); line-height:1.7;">You recommended <strong>${esc(yourLabel)}</strong> — the same decision Kennedy made.</div>
       </div>`;
   } else {
-    histBox = `
-      <div style="max-width:680px; margin:0 auto 28px; padding:16px 20px; background:#1a1200; border:1px solid var(--amber); border-radius:3px; text-align:left;">
-        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--amber); letter-spacing:2px; margin-bottom:8px;">&#9888; YOU DIVERGED FROM HISTORY</div>
-        <div style="font-size:14px; color:var(--amber-lit); line-height:1.7; margin-bottom:8px;">You recommended: <strong>${esc(tr.yourLabel)}</strong></div>
-        <div style="font-size:14px; color:#7ab07a; line-height:1.7;">Kennedy actually chose: <strong>${esc(tr.histLabel)}</strong>. ${tr.histDesc}</div>
-        <div style="font-size:13px; color:var(--green-dim); margin-top:10px; font-style:italic;">The simulation continues based on your choice — you'll see how your alternative path plays out.</div>
+    comparisonBox = `
+      <div style="max-width:740px; margin:28px auto 0; padding:16px 20px; background:#1a1200; border:1px solid var(--amber); border-radius:3px; text-align:left;">
+        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--amber); letter-spacing:2px; margin-bottom:8px;">&#9888; YOUR RECOMMENDATION DIVERGED FROM HISTORY</div>
+        <div style="font-size:14px; color:var(--amber-lit); line-height:1.7; margin-bottom:6px;">You recommended: <strong>${esc(yourLabel)}</strong></div>
+        <div style="font-size:14px; color:#7ab07a; line-height:1.7;">Kennedy chose: <strong>${esc(hist.label)}</strong></div>
       </div>`;
   }
 
   setRoot(`
-    <div class="transition-screen">
-      <div class="tr-meta">CONSEQUENCE — PHASE ${phase} CHOICE RECORDED</div>
-      <div class="tr-title">${esc(tr.title)}</div>
-      <div class="tr-text" id="tr-text">${tr.text}</div>
-      ${listenBtn('tr-text')}
-      ${histBox}
-      <button class="continue-btn" onclick="advanceFromTransition()">▶ &nbsp; CONTINUE TO NEXT BRIEFING</button>
+    <div style="max-width:740px; margin:0 auto; padding:30px 0 60px;">
+      <div class="ph-meta">WHAT ACTUALLY HAPPENED — PHASE ${phase}</div>
+      <div class="ph-title">${wh.title}</div>
+      <div class="doc">
+        <div class="doc-body" id="wh-text" style="font-size:15px; line-height:1.9;">
+          <p>${wh.text}</p>
+        </div>
+      </div>
+      ${listenBtn('wh-text')}
+      ${comparisonBox}
+      <div style="text-align:center; margin-top:36px;">
+        <button class="continue-btn" onclick="advanceFromTransition()">▶ &nbsp; CONTINUE TO NEXT BRIEFING</button>
+      </div>
     </div>
   `);
 }
@@ -1818,79 +1846,52 @@ function advanceFromTransition() {
 /* ==========================================================
    RESOLUTION — OCT 28
    ========================================================== */
-const OUTCOMES = {
-  historical: {
-    badge: 'OUTCOME: HISTORICAL PATH',
-    title: 'October 28, 1962 — "We\'re Eyeball to Eyeball"',
-    text: `<p>On the morning of October 28th, Khrushchev's message came through Radio Moscow: the Soviet Union would dismantle and return its missiles from Cuba. The crisis was over.</p>
-    <p>Your recommendations tracked closely with what Kennedy's EXCOMM actually chose. The naval quarantine bought time without committing an act of war. Responding only to Khrushchev's first, more personal letter — the Trollope Ploy — gave Khrushchev the face-saving exit he needed. The secret Turkey missile removal closed the deal, but this would not become public knowledge for decades.</p>
-    <p>Secretary of State Dean Rusk turned to his colleagues and said: <em>"We're eyeball to eyeball, and I think the other fellow just blinked."</em></p>
-    <p><strong>What you did not know — and neither did EXCOMM:</strong> Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? Here is what was happening inside it. After being depth-charged for hours with no radio contact from Moscow, the submarine's commander — Captain Valentin Savitsky — became convinced that nuclear war had already begun on the surface. He ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
-    <p>Soviet naval regulations required the unanimous agreement of three senior officers to authorize a nuclear launch. Two agreed. The third — Fleet Commodore Vasili Arkhipov — refused. He argued they should surface and await orders from Moscow. He was overruled by the other two, shouted at, accused of cowardice. He still refused.</p>
-    <p><strong>One man's refusal, in the dark, under attack, believing the world was already at war — is the reason civilization continued.</strong> No one in the White House, the Pentagon, or the Kremlin knew this had happened. The story did not become public until Russian archives were opened in 2002, forty years later.</p>`,
-    compare: `Kennedy chose the naval quarantine. He responded only to Khrushchev's first letter (Trollope Ploy). RFK privately promised Dobrynin the Turkey missiles would be removed in 6 months — secretly. Missiles were withdrawn from Cuba by November 1962. Turkey missiles quietly removed in April 1963.`
-  },
-  diplomatic: {
-    badge: 'OUTCOME: DIPLOMATIC PATH',
-    title: 'October 28, 1962 — A Slower Peace',
-    text: `<p>Your commitment to diplomacy and willingness to engage Soviet terms created an opening — but the resolution came slowly and with a political cost. The back-channel conversations and transparency with Khrushchev's demands produced a settlement that many at the time called too generous.</p>
-    <p>The public announcement acknowledged a U.S. no-invasion pledge and Soviet missile withdrawal. The Turkey trade, accepted more openly than in the historical outcome, fueled accusations that Kennedy had bargained away NATO's security. Some European allies were furious they were not consulted.</p>
-    <p>But the missiles were removed, no shots were fired at Cuba, and the world did not end. The crisis eventually produced one of its most lasting outcomes: the installation of a direct "hotline" between Washington and Moscow, so that future leaders would never have to communicate through formal diplomatic cables in moments when hours — or minutes — counted.</p>
-    <p><strong>What you did not know — and neither did EXCOMM:</strong> Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? While you were pursuing diplomacy, the crew of that submarine — depth-charged for hours with no contact from Moscow — believed nuclear war had already begun. Captain Valentin Savitsky ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
-    <p>Soviet naval regulations required three officers to unanimously agree. Two did. The third — Fleet Commodore Vasili Arkhipov — refused. He was shouted at, accused of cowardice. He still said no. He insisted they surface and await orders.</p>
-    <p><strong>One man's refusal, in the dark, under attack, is the reason your diplomatic efforts had time to work at all.</strong> No one in the White House knew. The story did not become public until 2002.</p>`,
-    compare: `Kennedy chose the naval quarantine and the Trollope Ploy. The Turkey missiles were removed secretly, not publicly. Resolution came on October 28th. Your more diplomatic choices created a slightly different path to the same destination.`
-  },
-  escalation: {
-    badge: 'OUTCOME: ESCALATION PATH — CRISIS AT THE BRINK',
-    title: 'October 27–28, 1962 — The Edge of the Abyss',
-    text: `<p>Your aggressive recommendations brought the United States and Soviet Union to the very brink of nuclear exchange. What happened next was not strategy — it was luck.</p>
-    <p><strong>What you did not know — and neither did EXCOMM:</strong> Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? Your aggressive choices pushed that submarine's crew past the breaking point. After being depth-charged for hours with no radio contact from Moscow, Captain Valentin Savitsky became convinced nuclear war had already begun. He ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
-    <p>Soviet naval regulations required three officers to unanimously agree. Two did. The third — Fleet Commodore Vasili Arkhipov — refused. He was shouted at, accused of cowardice, told the war had already started. He still said no. He insisted they surface and await orders from Moscow.</p>
-    <p>Kennedy, confronted with just how close the edge was, overruled General LeMay and accepted RFK's back-channel deal with Dobrynin. On October 28th, Khrushchev announced the missiles would be dismantled. The Turkey missiles were secretly removed six months later.</p>
-    <p><strong>The world survived. But the margin was razor thin — and it had nothing to do with strategy. It was one Soviet naval officer, in the dark, under attack, choosing not to fire.</strong> No one in the White House knew. The story did not become public until Russian archives were opened in 2002.</p>`,
-    compare: `Kennedy actually chose de-escalation at every critical juncture — naval quarantine, Trollope Ploy, no retaliation for the U-2 shootdown. Your more aggressive recommendations produced a more dangerous path to the same outcome, with a much smaller margin for survival.`
-  }
-};
-
 function renderResolution() {
   renderTimeline(5);
-  const o = OUTCOMES[state.outcome];
 
-  const choiceSummaryRows = Object.entries(state.choiceLabels).map(([phase, label]) => `
-    <div class="choice-row">
-      <span class="phase-tag">PHASE ${phase}:</span>
-      <span>${esc(label)}</span>
-    </div>`).join('');
+  // Build choice comparison table
+  const phases = [
+    { num: 1, title: 'The Discovery' },
+    { num: 2, title: 'The Debate' },
+    { num: 3, title: 'The Quarantine' },
+    { num: 4, title: 'Black Saturday' }
+  ];
+  const comparisonRows = phases.map(p => {
+    const yours = state.choiceLabels[p.num] || 'N/A';
+    const hist = HISTORICAL[p.num];
+    const matched = state.choices[p.num] === hist.choice;
+    const icon = matched ? '<span style="color:var(--green-mid);">&#10003;</span>' : '<span style="color:var(--amber);">&#9888;</span>';
+    return `<div class="choice-row">
+      <span class="phase-tag">${icon} PH ${p.num}:</span>
+      <span>You: <strong>${esc(yours)}</strong> &nbsp;|&nbsp; Kennedy: <strong>${esc(hist.label)}</strong></span>
+    </div>`;
+  }).join('');
 
   setRoot(`
     <div class="ph-meta">SUNDAY, OCTOBER 28, 1962 &nbsp;—&nbsp; CRISIS RESOLUTION</div>
-    <div class="ph-title">The Outcome</div>
-
-    <div style="margin-bottom:20px;">
-      <span class="outcome-badge ${state.outcome}">${o.badge}</span>
-    </div>
-
-    <div class="ph-title" style="font-size:20px; margin-bottom:16px;">${o.title}</div>
+    <div class="ph-title">The Outcome: How the Crisis Ended</div>
 
     <div class="doc">
       <div class="doc-body" id="resolution-text" style="font-size:15px; line-height:1.9;">
-        ${o.text}
+        <p>On the morning of October 28th, Khrushchev's message came through Radio Moscow: the Soviet Union would dismantle and return its missiles from Cuba. The thirteen days were over.</p>
+        <p>The deal: the United States pledged not to invade Cuba. The Soviet missiles were withdrawn under UN inspection by November 1962. Secretly — and this would not become public for decades — the U.S. agreed to remove its Jupiter missiles from Turkey within six months. They were quietly dismantled in April 1963.</p>
+        <p>The crisis produced lasting consequences. A direct "hotline" was installed between Washington and Moscow so that future leaders would never have to communicate through slow diplomatic cables in moments when minutes counted. Within a year, the United States, Soviet Union, and United Kingdom signed the Partial Nuclear Test Ban Treaty — the first major arms control agreement of the Cold War.</p>
+        <p><strong>What you did not know — and neither did EXCOMM:</strong></p>
+        <p>Remember submarine B-59, the Foxtrot-class boat you saw in the Phase 3 intelligence photos? Here is what was happening inside it.</p>
+        <p>After being depth-charged for hours with no radio contact from Moscow, the submarine's commander — Captain Valentin Savitsky — became convinced that nuclear war had already begun on the surface. He ordered B-59's nuclear torpedo armed and prepared for launch against the American destroyers above. The torpedo carried a warhead equivalent to the Hiroshima bomb.</p>
+        <p>Soviet naval regulations required the unanimous agreement of three senior officers to authorize a nuclear launch. Two agreed. The third — Fleet Commodore Vasili Arkhipov — refused. He argued they should surface and await orders from Moscow. He was shouted at, accused of cowardice. He still refused.</p>
+        <p><strong>One man's refusal, in the dark, under attack, believing the world was already at war — is the reason civilization continued.</strong> No one in the White House, the Pentagon, or the Kremlin knew this had happened. The story did not become public until Russian archives were opened in 2002, forty years later.</p>
       </div>
     </div>
     ${listenBtn('resolution-text')}
 
     <div class="compare-box">
-      <h3>YOUR ADVISORY RECORD</h3>
-      <div class="choices-summary">${choiceSummaryRows}</div>
-      <div style="padding-top:10px; border-top:1px solid var(--border);">
-        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--amber); margin-bottom:8px; letter-spacing:1px;">WHAT KENNEDY ACTUALLY DID:</div>
-        <div style="font-size:13px; color:#7ab07a; line-height:1.8;">${o.compare}</div>
-      </div>
+      <h3>YOUR DECISIONS vs. KENNEDY'S DECISIONS</h3>
+      <div class="choices-summary">${comparisonRows}</div>
     </div>
 
     <div style="text-align:center; margin-top:36px;">
-      <button class="continue-btn" onclick="goToRationale()">▶ &nbsp; WRITE YOUR ANALYSIS</button>
+      <button class="continue-btn" onclick="goToRationale()">▶ &nbsp; WRITE YOUR FINAL ANALYSIS</button>
     </div>
   `);
 }
@@ -1906,48 +1907,66 @@ function goToRationale() {
 function renderRationale() {
   renderTimeline(5);
   setRoot(`
-    <div class="ph-meta">FINAL ADVISORY REPORT — ${esc(state.name)}</div>
-    <div class="ph-title">Your Analysis</div>
-    <div class="ph-context">
-      You have completed your role as a member of EXCOMM. Now, as a historian and analyst, write your formal assessment of the decisions made during the Cuban Missile Crisis of October 1962.
-    </div>
+    <div class="ph-meta">FINAL REPORT — ${esc(state.name)}</div>
+    <div class="ph-title">Your Final Analysis</div>
 
+    <!-- QUESTION 1: REFLECTION -->
     <div class="rationale-prompts">
-      <h3>CONSIDER ADDRESSING THE FOLLOWING IN YOUR RESPONSE:</h3>
-      <ul>
-        <li>Which of your four recommendations do you consider most important, and why?</li>
-        <li>How did your choices differ from — or align with — what Kennedy actually decided?</li>
-        <li>What does the story of Vasili Arkhipov (and submarine B-59) tell us about how the crisis was actually resolved?</li>
-        <li>What does this crisis reveal about nuclear deterrence, the limits of military force, and the role of back-channel diplomacy?</li>
-        <li>If you were advising a president today, what lessons from October 1962 would you share?</li>
-      </ul>
+      <h3>QUESTION 1 — REFLECTION ON YOUR CHOICES</h3>
+      <p style="font-size:14px; color:#7ab07a; line-height:1.8; margin-top:8px;">Look back at the four decisions you made during the simulation. Which decision was the hardest for you, and why? If any of your choices were different from what Kennedy actually did, explain whether — after seeing what really happened — you would change your recommendation or stick with it.</p>
     </div>
 
     <textarea
       class="rationale-textarea"
       id="rationale-text"
-      placeholder="Write your analysis here. Discuss your key decisions, the reasoning behind them, what surprised you, and what lessons this crisis teaches about international relations and leadership under pressure..."
+      placeholder="The hardest decision for me was..."
       oninput="handleRationaleInput(this.value)"
+      style="min-height:200px;"
     >${esc(state.rationale)}</textarea>
 
+    <!-- QUESTION 2: COMPREHENSION CHECK -->
+    <div class="rationale-prompts" style="margin-top:8px;">
+      <h3>QUESTION 2 — CHECK FOR UNDERSTANDING</h3>
+      <p style="font-size:14px; color:#7ab07a; line-height:1.8; margin-top:8px;">The Cuban Missile Crisis was resolved without nuclear war. Based on what you read in this simulation, identify <strong>two specific reasons</strong> why. One should involve a decision made by a leader (Kennedy, Khrushchev, or someone else), and one should involve something that was <em>not</em> planned or controlled by any leader.</p>
+    </div>
+
+    <textarea
+      class="rationale-textarea"
+      id="comprehension-text"
+      placeholder="Two reasons the crisis was resolved without nuclear war..."
+      oninput="handleComprehensionInput(this.value)"
+      style="min-height:200px;"
+    >${esc(state.comprehension)}</textarea>
+
     <div id="rationale-err" class="error-msg" style="margin-bottom:12px;"></div>
-    <button class="submit-btn" onclick="submitRationale()">▶ &nbsp; SUBMIT ANALYSIS &amp; GENERATE REPORT</button>
+    <button class="submit-btn" onclick="submitRationale()">▶ &nbsp; SUBMIT &amp; GENERATE REPORT</button>
   `);
 }
 
 function submitRationale() {
-  const text = document.getElementById('rationale-text').value.trim();
-  if (text.length < 50) {
-    document.getElementById('rationale-err').textContent = '⚠ Please write a more complete analysis (at least a few sentences) before submitting.';
+  const r = document.getElementById('rationale-text').value.trim();
+  const c = document.getElementById('comprehension-text').value.trim();
+  if (r.length < 30) {
+    document.getElementById('rationale-err').textContent = '⚠ Please write a more complete answer to Question 1 (at least a few sentences).';
     return;
   }
-  state.rationale = text;
+  if (c.length < 30) {
+    document.getElementById('rationale-err').textContent = '⚠ Please write a more complete answer to Question 2 (at least a few sentences).';
+    return;
+  }
+  state.rationale = r;
+  state.comprehension = c;
   state.screen = 'complete';
   render();
 }
 
 function handleRationaleInput(value) {
   state.rationale = value;
+  persistState();
+}
+
+function handleComprehensionInput(value) {
+  state.comprehension = value;
   persistState();
 }
 
@@ -1985,7 +2004,7 @@ function renderComplete() {
 function resetSim() {
   Object.assign(state, {
     name: '', screen: 'intro', choices: {}, choiceLabels: {},
-    transition: null, outcome: '', rationale: ''
+    explanations: {}, transition: null, rationale: '', comprehension: ''
   });
   clearPersistedState();
   render();
@@ -2045,7 +2064,7 @@ function exportPDF() {
     TEXT('TOP SECRET — EYES ONLY', PW / 2, 18, 8, 255, 255, 255, 'bold', 'center');
 
     y = 65;
-    const heading = isContinuation ? 'SECTION III — STUDENT ANALYSIS (CONT.)' : 'SECTION III — STUDENT ANALYSIS';
+    const heading = isContinuation ? 'SECTION II — STUDENT ANALYSIS (CONT.)' : 'SECTION II — STUDENT ANALYSIS';
     TEXT(heading, ML, y, 14, 30, 60, 30, 'bold');
     y += 6;
     LINE(ML, y, PW - MR, y, 150, 130, 90);
@@ -2091,15 +2110,12 @@ function exportPDF() {
   y += 15;
   TEXT(new Date().toLocaleDateString('en-US', { year:'numeric', month:'long', day:'numeric' }), ML + 20, y, 12, 40, 40, 40);
 
-  const outcomeLabels = {
-    historical: 'Historical Path — Aligned with Kennedy\'s Actual Decisions',
-    diplomatic: 'Diplomatic Path — More Conciliatory Than Kennedy\'s Approach',
-    escalation: 'Escalation Path — More Aggressive Than Kennedy\'s Approach'
-  };
+  // Count how many matched history
+  const matchCount = [1,2,3,4].filter(p => state.choices[p] === HISTORICAL[p].choice).length;
   y += 24;
-  TEXT('OUTCOME TRACK:', ML, y, 11, 80, 60, 0);
+  TEXT('HISTORICAL ALIGNMENT:', ML, y, 11, 80, 60, 0);
   y += 15;
-  TEXT(outcomeLabels[state.outcome] || state.outcome, ML + 20, y, 12, 40, 40, 40);
+  TEXT(`${matchCount} of 4 decisions matched Kennedy's actual choices`, ML + 20, y, 12, 40, 40, 40);
 
   y += 45;
   LINE(ML, y, PW - MR, y, 180, 160, 120);
@@ -2119,62 +2135,62 @@ function exportPDF() {
   ];
 
   phaseData.forEach(ph => {
-    checkPage(50);
+    checkPage(90);
     TEXT(`PHASE ${ph.num} — ${ph.date}`, ML, y, 10, 139, 0, 0, 'bold');
     y += 13;
     TEXT(`Decision Point: ${ph.label}`, ML + 10, y, 10, 60, 50, 0);
     y += 13;
     const choice = state.choiceLabels[ph.num] || 'N/A';
-    TEXT(`Recommendation: ${choice}`, ML + 10, y, 11, 20, 20, 20, 'bold');
-    y += 20;
+    const hist = HISTORICAL[ph.num];
+    const matched = state.choices[ph.num] === hist.choice;
+    TEXT(`Your Recommendation: ${choice}`, ML + 10, y, 11, 20, 20, 20, 'bold');
+    y += 13;
+    TEXT(`Kennedy's Decision: ${hist.label}${matched ? ' ✓ MATCH' : ''}`, ML + 10, y, 10, 80, 60, 0);
+    y += 14;
+    // Student explanation
+    const explanation = state.explanations[ph.num];
+    if (explanation) {
+      const eh = BLOCK(`Student reasoning: "${explanation}"`, ML + 10, y, TW - 10, 10, 60, 60, 60, 'italic');
+      y += eh + 6;
+    }
     LINE(ML, y, PW - MR, y, 200, 190, 170);
     y += 14;
   });
 
-  // ── OUTCOME NARRATIVE ──
-  checkPage(60);
-  y += 10;
-  TEXT('SECTION II — SIMULATION OUTCOME', ML, y, 14, 30, 60, 30, 'bold');
-  y += 6;
-  LINE(ML, y, PW - MR, y, 150, 130, 90);
-  y += 18;
-
-  const outcomeText = OUTCOMES[state.outcome];
-  if (outcomeText) {
-    TEXT(outcomeText.title, ML, y, 12, 20, 20, 20, 'bold');
-    y += 18;
-    // Strip HTML tags for PDF
-    const cleanOutcome = outcomeText.compare.replace(/<[^>]*>/g, '');
-    const oh = BLOCK(`Historical Comparison: ${cleanOutcome}`, ML, y, TW, 11, 50, 50, 50);
-    y += oh + 14;
-  }
-
-  // ── PAGE 2: RATIONALE ────────────────────────────────────
+  // ── PAGE 2: STUDENT ANALYSIS ────────────────────────────
   startAnalysisPage(false);
 
-  const rationaleClean = (state.rationale || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim();
-  const rationaleText = rationaleClean || 'No analysis submitted.';
-  const rationaleLines = doc.splitTextToSize(rationaleText, TW);
-  const rationaleLineHeight = 12 * 1.35;
+  const lineHeight = 12 * 1.35;
 
-  doc.setFontSize(12);
-  doc.setTextColor(20, 20, 20);
-  doc.setFont('times', 'normal');
+  function writeBlock(label, text) {
+    checkPage(60);
+    TEXT(label, ML, y, 11, 139, 0, 0, 'bold');
+    y += 16;
+    const clean = (text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n').trim() || 'No response submitted.';
+    const lines = doc.splitTextToSize(clean, TW);
+    doc.setFontSize(12);
+    doc.setTextColor(20, 20, 20);
+    doc.setFont('times', 'normal');
+    lines.forEach(line => {
+      if (y + lineHeight > PH - 60) {
+        startAnalysisPage(true);
+        doc.setFontSize(12);
+        doc.setTextColor(20, 20, 20);
+        doc.setFont('times', 'normal');
+      }
+      doc.text(line, ML, y);
+      y += lineHeight;
+    });
+    y += 16;
+  }
 
-  rationaleLines.forEach(line => {
-    if (y + rationaleLineHeight > PH - 60) {
-      startAnalysisPage(true);
-      doc.setFontSize(12);
-      doc.setTextColor(20, 20, 20);
-      doc.setFont('times', 'normal');
-    }
-    doc.text(line, ML, y);
-    y += rationaleLineHeight;
-  });
+  writeBlock('QUESTION 1 — REFLECTION ON YOUR CHOICES', state.rationale);
+  writeBlock('QUESTION 2 — CHECK FOR UNDERSTANDING', state.comprehension);
 
-  y += 30;
+  y += 14;
 
   // Footer on last page
+  checkPage(60);
   LINE(ML, y, PW - MR, y, 180, 160, 120);
   y += 16;
   TEXT('Cuban Missile Crisis EXCOMM Simulation — Educational Use Only', PW / 2, y, 9, 120, 100, 60, 'italic', 'center');
