@@ -100,9 +100,26 @@
       white-space: nowrap;
     }
 
-    .tl-day.done  { background: #0a1e0a; color: var(--green-dim); border-color: #1e3a1e; }
-    .tl-day.now   { background: #1a3a1a; color: var(--green-lit); border-color: var(--green-mid); font-weight: bold; }
+    .tl-day.done  { background: #0a1e0a; color: var(--green-dim); border-color: #1e3a1e; cursor: pointer; }
+    .tl-day.done:hover { background: #142814; color: var(--green-lit); border-color: var(--green-mid); }
+    .tl-day.now   { background: #1a3a1a; color: var(--green-lit); border-color: var(--green-mid); font-weight: bold; cursor: pointer; }
+    .tl-day.now:hover { background: #244a24; }
     .tl-day.future{ opacity: 0.35; }
+
+    .tl-restart {
+      font-family: 'Courier New', monospace;
+      font-size: 10px;
+      color: var(--red);
+      padding: 2px 8px;
+      border: 1px solid var(--red-dark);
+      border-radius: 2px;
+      background: transparent;
+      cursor: pointer;
+      margin-left: auto;
+      white-space: nowrap;
+      letter-spacing: 1px;
+    }
+    .tl-restart:hover { background: rgba(192,57,43,0.15); color: #e06050; border-color: var(--red); }
 
     /* ── LAYOUT ──────────────────────────────── */
     .main {
@@ -886,16 +903,50 @@ const DAYS = [
   { label:'OCT 28', phase:5 },
 ];
 
+const PHASE_SCREENS = { 1: 'phase1', 2: 'phase2', 3: 'phase3', 4: 'phase4', 5: 'resolution' };
+
+function getHighestVisitedPhase() {
+  // Determine highest phase the student has reached based on choices made + current screen
+  const choicePhases = Object.keys(state.choices).map(Number);
+  let highest = choicePhases.length > 0 ? Math.max(...choicePhases) : 0;
+  // If they're on a phase screen, that phase is also visited
+  const screenPhaseMap = { phase1:1, phase2:2, phase3:3, phase4:4, resolution:5, rationale:5, complete:5 };
+  const currentPhase = screenPhaseMap[state.screen] || 0;
+  return Math.max(highest, currentPhase);
+}
+
+function navigateToPhase(phase) {
+  const screen = PHASE_SCREENS[phase];
+  if (!screen) return;
+  state.screen = screen;
+  state.transition = null;
+  render();
+}
+
 function renderTimeline(activePhase) {
   const tl = document.getElementById('timeline');
+  const highestVisited = getHighestVisitedPhase();
+  const showRestart = state.screen !== 'intro';
+
   tl.innerHTML = '<span class="tl-label">DAYS:</span>' +
     DAYS.map(d => {
       let cls = 'tl-day ';
+      const canClick = d.phase <= highestVisited;
       if (d.phase < activePhase) cls += 'done';
       else if (d.phase === activePhase) cls += 'now';
       else cls += 'future';
+      if (canClick && d.phase !== activePhase && d.phase < activePhase) {
+        return `<span class="${cls}" onclick="navigateToPhase(${d.phase})" title="Return to Phase ${d.phase}">${d.label}</span>`;
+      }
       return `<span class="${cls}">${d.label}</span>`;
-    }).join('');
+    }).join('') +
+    (showRestart ? '<button class="tl-restart" onclick="confirmRestart()">↺ RESTART</button>' : '');
+}
+
+function confirmRestart() {
+  if (confirm('Restart the simulation? All choices and progress will be cleared.')) {
+    resetSim();
+  }
 }
 
 /* ==========================================================
