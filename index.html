@@ -822,16 +822,25 @@
 const state = {
   name: '',
   screen: 'intro',
-  choices: {},        // phase (1-4) -> 'A' | 'B' | 'C'
-  choiceLabels: {},   // phase -> short label for summary
-  explanations: {},   // phase -> student's typed explanation for their choice
-  transition: null,   // { phase, nextScreen }
+  mode: 'historical',  // 'historical' or 'alternative'
+  choices: {},          // phase (1-4) -> 'A' | 'B' | 'C'
+  choiceLabels: {},     // phase -> short label for summary
+  explanations: {},     // phase -> student's typed explanation (historical mode)
+  transition: null,     // { phase, nextScreen }
   rationale: '',
   comprehension: ''
 };
 
 const STORAGE_KEY = 'excomm_state_v1';
+const UNLOCK_KEY = 'excomm_completed_v1';
 const VALID_SCREENS = new Set(['intro', 'phase1', 'transition', 'phase2', 'phase3', 'phase4', 'resolution', 'rationale', 'complete']);
+
+function isAltUnlocked() {
+  try { return localStorage.getItem(UNLOCK_KEY) === 'true'; } catch(e) { return false; }
+}
+function markCompleted() {
+  try { localStorage.setItem(UNLOCK_KEY, 'true'); } catch(e) {}
+}
 
 function persistState() {
   if (typeof localStorage === 'undefined') return;
@@ -839,6 +848,7 @@ function persistState() {
     const snapshot = {
       name: state.name,
       screen: state.screen,
+      mode: state.mode,
       choices: state.choices,
       choiceLabels: state.choiceLabels,
       explanations: state.explanations,
@@ -866,6 +876,7 @@ function loadPersistedState() {
     Object.assign(state, {
       name: data.name || '',
       screen: data.screen || 'intro',
+      mode: data.mode || 'historical',
       choices: data.choices ? { ...data.choices } : {},
       choiceLabels: data.choiceLabels ? { ...data.choiceLabels } : {},
       explanations: data.explanations ? { ...data.explanations } : {},
@@ -1066,6 +1077,14 @@ function render() {
    ========================================================== */
 function renderIntro() {
   renderTimeline(0);
+  const unlocked = isAltUnlocked();
+  const altBtn = unlocked ? `
+    <div style="margin-top:24px; padding-top:20px; border-top:1px solid var(--border);">
+      <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--red); letter-spacing:2px; margin-bottom:10px;">&#9888; CLASSIFIED — ALTERNATIVE HISTORY MODE UNLOCKED</div>
+      <p style="color:var(--amber-lit); font-size:14px; margin-bottom:14px; line-height:1.7;">You've completed the historical simulation. This mode lets you replay the crisis and see how <em>your</em> choices could have changed history. Every decision creates a different timeline. No two playthroughs are the same.</p>
+      <button class="start-btn" style="background:#1a1200; border-color:var(--amber); color:var(--amber-lit);" onclick="startAltSim()">&#9889; &nbsp; ALTERNATIVE HISTORY MODE</button>
+    </div>` : '';
+
   setRoot(`
     <div class="intro-screen">
       <div class="intro-eyebrow">NATIONAL SECURITY COUNCIL — 1962</div>
@@ -1082,8 +1101,21 @@ function renderIntro() {
       <div id="name-err" class="error-msg"></div>
       <br>
       <button class="start-btn" onclick="startSim()">▶ &nbsp; BEGIN BRIEFING</button>
+      ${altBtn}
     </div>
   `);
+}
+
+function startAltSim() {
+  const n = document.getElementById('sname').value.trim();
+  if (!n) {
+    document.getElementById('name-err').textContent = '⚠ NAME REQUIRED TO PROCEED';
+    return;
+  }
+  state.name = n;
+  state.mode = 'alternative';
+  state.screen = 'phase1';
+  render();
 }
 
 function startSim() {
@@ -1093,6 +1125,7 @@ function startSim() {
     return;
   }
   state.name = n;
+  state.mode = 'historical';
   state.screen = 'phase1';
   render();
 }
@@ -1102,9 +1135,11 @@ function startSim() {
    ========================================================== */
 function renderPhase1() {
   renderTimeline(1);
+  const altMode = state.mode === 'alternative';
   setRoot(`
     <div class="ph-meta">TUESDAY, OCTOBER 16, 1962 &nbsp;—&nbsp; 11:45 AM &nbsp;—&nbsp; THE WHITE HOUSE, CABINET ROOM</div>
     <div class="ph-title">Phase One: The Discovery</div>
+    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE — YOUR CHOICES WILL SHAPE WHAT HAPPENS NEXT</div>' : ''}
     <div class="ph-context" id="ph1-context">
       CIA Director John McCone has summoned EXCOMM to an emergency meeting.
       Yesterday's U-2 reconnaissance flight over Cuba has produced photographs
@@ -1295,12 +1330,15 @@ function renderPhase1() {
    ========================================================== */
 function renderPhase2() {
   renderTimeline(2);
+  const altMode = state.mode === 'alternative';
+  const contextText = altMode
+    ? ALT_PHASE2_INTROS[state.choices[1]]
+    : `For three days, EXCOMM meets in grueling, secret sessions in the Cabinet Room. Outside, the country goes about its ordinary life — no one knows. Inside, the arguments rage. The Joint Chiefs push for air strikes and invasion. McNamara argues for a naval blockade. Robert Kennedy warns that a surprise attack on Cuba would make America "the Tojo of the 1960s." Kennedy secretly tape-records the meetings. Meanwhile, U-2 flights confirm construction is accelerating — the Soviets know the secret cannot hold much longer.`;
   setRoot(`
     <div class="ph-meta">WEDNESDAY–FRIDAY, OCTOBER 17–19, 1962 &nbsp;—&nbsp; THE WHITE HOUSE</div>
     <div class="ph-title">Phase Two: The Debate</div>
-    <div class="ph-context" id="ph2-context">
-      For three days, EXCOMM meets in grueling, secret sessions in the Cabinet Room. Outside, the country goes about its ordinary life — no one knows. Inside, the arguments rage. The Joint Chiefs push for air strikes and invasion. McNamara argues for a naval blockade. Robert Kennedy warns that a surprise attack on Cuba would make America "the Tojo of the 1960s." Kennedy secretly tape-records the meetings. Meanwhile, U-2 flights confirm construction is accelerating — the Soviets know the secret cannot hold much longer.
-    </div>
+    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE</div>' : ''}
+    <div class="ph-context" id="ph2-context">${contextText}</div>
     ${listenBtn('ph2-context')}
 
     <!-- EXCOMM MEETING TRANSCRIPT -->
@@ -1389,12 +1427,15 @@ function renderPhase2() {
    ========================================================== */
 function renderPhase3() {
   renderTimeline(3);
+  const altMode = state.mode === 'alternative';
+  const contextText = altMode
+    ? ALT_PHASE3_INTROS[state.choices[2]]
+    : `Kennedy's speech on the evening of October 22nd shocks the nation and the world. He reveals the Soviet missiles to the American public and announces a naval quarantine. "The purpose of these bases," Kennedy declares, "can be none other than to provide a nuclear strike capability against the Western Hemisphere." The quarantine line is drawn 500 miles from Cuba. The U.S. military goes to DEFCON 2 — the highest peacetime readiness in American history. Nuclear-armed B-52 bombers are airborne around the clock. NATO allies are supportive. Khrushchev publicly calls the quarantine "piracy" and "a gross violation of international law." Soviet ships continue toward Cuba.`;
   setRoot(`
     <div class="ph-meta">MONDAY–THURSDAY, OCTOBER 22–25, 1962</div>
     <div class="ph-title">Phase Three: The Quarantine</div>
-    <div class="ph-context" id="ph3-context">
-      Kennedy's speech on the evening of October 22nd shocks the nation and the world. He reveals the Soviet missiles to the American public and announces a naval quarantine. "The purpose of these bases," Kennedy declares, "can be none other than to provide a nuclear strike capability against the Western Hemisphere." The quarantine line is drawn 500 miles from Cuba. The U.S. military goes to DEFCON 2 — the highest peacetime readiness in American history. Nuclear-armed B-52 bombers are airborne around the clock. NATO allies are supportive. Khrushchev publicly calls the quarantine "piracy" and "a gross violation of international law." Soviet ships continue toward Cuba.
-    </div>
+    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE</div>' : ''}
+    <div class="ph-context" id="ph3-context">${contextText}</div>
     ${listenBtn('ph3-context')}
 
     <!-- KENNEDY ADDRESS — IMAGE + AUDIO -->
@@ -1586,9 +1627,11 @@ function renderPhase3() {
    ========================================================== */
 function renderPhase4() {
   renderTimeline(4);
+  const altMode = state.mode === 'alternative';
   setRoot(`
     <div class="ph-meta">SATURDAY, OCTOBER 27, 1962 &nbsp;—&nbsp; "BLACK SATURDAY"</div>
     <div class="ph-title">Phase Four: The Brink</div>
+    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE</div>' : ''}
     <div class="ph-context" id="ph4-context">
       Everything is happening at once. An American U-2 reconnaissance aircraft has been shot down over Cuba by a Soviet surface-to-air missile. The pilot, Major Rudolf Anderson, is dead — the first American combat fatality of the crisis. A second U-2 has accidentally wandered into Soviet airspace over Alaska, scrambling Soviet MiG fighters. The Joint Chiefs are demanding retaliation. And then — two contradictory letters from Khrushchev arrive within 24 hours of each other, presenting an agonizing dilemma.
     </div>
@@ -1739,6 +1782,121 @@ const WHAT_HAPPENED = {
   }
 };
 
+/* ==========================================================
+   ALTERNATIVE HISTORY — BRANCHING NARRATIVES
+   ========================================================== */
+const ALT_TRANSITIONS = {
+  '1A': {
+    title: 'The War Room — October 16, 1962',
+    text: `General LeMay slams his fist on the table: "Finally — someone with backbone." Within two hours, the Joint Chiefs begin planning Operation Scabbards — coordinated air strikes targeting all known missile sites, Soviet airfields, and SA-2 anti-aircraft batteries across Cuba. McNamara looks sick. Robert Kennedy catches your eye across the room and mouths: "Pearl Harbor." The planning machinery of the most powerful military on Earth has lurched into motion. It will be very hard to stop.`
+  },
+  '1B': {
+    title: 'The Quarantine Plan — October 16, 1962',
+    text: `McNamara seizes on your recommendation immediately: "This is the option that doesn't start with killing Russians." The Navy begins planning for what will be the largest naval deployment since World War II — 180 ships forming a ring of steel around Cuba. General LeMay is incandescent: "This is worse than Munich. You're flinching at the moment of truth." The Joint Chiefs formally register their dissent in writing — an extraordinary act. EXCOMM is tearing itself apart, and the Soviets haven't even learned that the Americans know.`
+  },
+  '1C': {
+    title: 'Back-Channel Contact — October 16, 1962',
+    text: `Bobby Kennedy arranges a quiet meeting with Soviet Ambassador Dobrynin at the Justice Department. No aides. No notes. Dobrynin's face goes white when Bobby describes the reconnaissance photos. "I have received no instructions about this," he stammers — and it seems genuine. Khrushchev may have kept even his own ambassador in the dark. But the diplomatic channel, once opened, is fragile. CIA Director McCone warns the President: "Every hour we spend talking, Mr. President, is another hour they spend pouring concrete and arming warheads."`
+  },
+  '2A': {
+    title: 'The Speech — October 22, 1962',
+    text: `One hundred million Americans watch Kennedy reveal the crisis. In Moscow, Khrushchev is dragged from bed. His translator's voice shakes as he reads the English transcript. "He's bluffing," Khrushchev mutters. But privately, he tells Defense Minister Malinovsky: "Begin contingency planning for removal. Not yet — but begin planning." In Havana, Castro goes to full military alert and writes what aides will later call his "Armageddon Letter" to Moscow, urging Khrushchev to launch a nuclear first strike if the Americans invade.`
+  },
+  '2B': {
+    title: 'The Ultimatum — October 22, 1962',
+    text: `The 24-hour ultimatum detonates across the world like a bomb. British Prime Minister Macmillan calls the White House at 3 AM: "Has your President lost his mind?" NATO ambassadors flood the State Department with frantic cables. In Moscow, Khrushchev convenes an emergency Presidium session. Marshal Malinovsky advises that Soviet forces in Cuba should be authorized to use tactical nuclear weapons if invaded. Khrushchev doesn't say no. Castro mobilizes 270,000 Cuban troops and militia. The clock reads 23 hours and counting.`
+  },
+  '2C': {
+    title: 'The Appeal — October 22, 1962',
+    text: `Kennedy's appeal to the United Nations earns international praise — and domestic fury. Senator Richard Russell of Georgia calls the President at midnight: "Mr. President, you look weak, and Khrushchev knows it." The UN's U Thant immediately proposes a two-week standdown. Khrushchev agrees — but CIA reconnaissance shows the Soviets are now working under floodlights, around the clock. They're racing to make the missiles operational before any deal is struck. The diplomatic window and the construction timeline are in a dead sprint against each other.`
+  },
+  '3A': {
+    title: 'The Boarding — October 24, 1962',
+    text: `The USS Joseph P. Kennedy Jr. — named for the President's dead brother — fires a shot across the bow of the Soviet freighter Kimovsk. The Soviet captain refuses to stop. After a thirty-minute standoff, U.S. Marines board at gunpoint. In the hold: missile guidance systems, warhead components, and technical manuals in Russian. Khrushchev goes on Radio Moscow: "The pirates of Washington have committed an act of war." In the deep Atlantic, Soviet submarine B-59 picks up the broadcast on a crackling radio. Commander Savitsky turns to his crew: "It has begun."`
+  },
+  '3B': {
+    title: 'The Blink — October 24, 1962',
+    text: `The Soviet tanker Bucharest approaches the quarantine line. The captain radios that he carries only petroleum. Kennedy orders the Navy to let him through after visual inspection — no boarding. General LeMay throws his cigar at a map in the Pentagon war room. But by nightfall, six more Soviet ships have turned around. Then twelve. Then sixteen. The cargo vessel Kimovsk — the one carrying missile components — makes a wide U-turn in the mid-Atlantic. In the White House Situation Room, someone whispers: "They're blinking." But 42 missiles are still in Cuba, and construction has not stopped.`
+  },
+  '3C': {
+    title: 'The Standdown — October 24, 1962',
+    text: `U.S. Navy ships pull back from the quarantine line. Khrushchev declares victory on Radio Moscow. Within hours, the Soviet cargo vessel Kimovsk — carrying missile guidance components — passes through the now-unguarded quarantine zone and docks at Mariel. CIA photo analysis the next morning confirms the worst: at least six of the MRBM sites are now nearly operational. Senator Russell goes on national television and calls the President "a coward who has traded American security for a photo opportunity at the United Nations." The Joint Chiefs request a private meeting with the Vice President.`
+  },
+  '4A': {
+    title: 'The Gambit — October 27, 1962',
+    text: `RFK calls Dobrynin from a phone booth in Georgetown at 7:42 PM. "Respond to the first letter only," he says. "The Turkey missiles come out in six months — but Anatoly, if this leaks, even from your side, the deal dies and my brother's hands will be tied." Dobrynin cables Moscow within the hour. In the Kremlin, Khrushchev reads the message alone. He stares out the window at the Moscow River for a long time. Then he calls for his secretary: "Take a letter. Address it to the President of the United States." He begins to dictate.`
+  },
+  '4B': {
+    title: 'The Public Offer — October 27, 1962',
+    text: `Kennedy goes on television at 9 PM: "The United States will remove its Jupiter missiles from Turkey within 90 days, in exchange for the complete withdrawal of Soviet offensive weapons from Cuba." NATO headquarters in Brussels erupts. The Turkish ambassador storms out of an emergency session. French President de Gaulle tells aides: "The Americans have sold Europe." But in Moscow, Khrushchev is caught off guard. He expected the Americans to never admit this publicly. He retreats to his dacha to think. Soviet ships halt in the Atlantic. The world holds its breath for a reply that doesn't come for sixteen hours.`
+  },
+  '4C': {
+    title: 'The Retaliation — October 27, 1962',
+    text: `At 2:14 PM, four F-105 Thunderchiefs scream across the Cuban coastline at treetop level and obliterate the SA-2 battery that killed Major Anderson. Twelve Soviet soldiers die in the attack. The explosions are visible from the U.S. naval base at Guantánamo Bay. In Moscow, Marshal Malinovsky picks up a red telephone. In Havana, Castro orders his anti-aircraft batteries to fire on any American aircraft. And 300 feet beneath the surface of the Atlantic, aboard submarine B-59, Captain Savitsky hears a garbled radio transmission through the static: "...strikes confirmed... Soviet casualties..." He turns to his weapons officer.`
+  }
+};
+
+const ALT_PHASE2_INTROS = {
+  A: `The air strike planning is now in its third day. Pentagon war rooms are covered in maps of Cuba. Target lists grow longer by the hour. But a new problem has emerged: CIA analysis reveals that Soviet forces in Cuba may include tactical nuclear weapons — short-range battlefield nukes that Soviet field commanders could launch without orders from Moscow. An invasion force landing on Cuban beaches could be walking into a nuclear inferno. The debate that seemed settled three days ago has cracked wide open. The President demands new options before he addresses the nation.`,
+  B: `The quarantine plan is coming together, but the details are agonizing. How close to Cuba? What if a Soviet ship refuses to stop? What if a Soviet submarine surfaces inside the quarantine zone? McNamara and Admiral Anderson are barely speaking — Anderson believes the Navy knows how to run a blockade and doesn't need a civilian telling him which ships to stop. Meanwhile, CIA imagery shows the construction sites accelerating: the Soviets are now working under floodlights, 24 hours a day. The President has set a deadline — he will speak to the nation on Monday, October 22nd.`,
+  C: `The diplomatic channel is still open but producing nothing. Dobrynin met with Bobby Kennedy twice more — each time, the ambassador looked more shaken, but each time, he repeated the same line: "There are only defensive weapons in Cuba." The CIA intercepts suggest Dobrynin may actually not know. Meanwhile, the President's inner circle is fracturing. General LeMay told the President directly: "You're in a pretty bad fix, Mr. President." Kennedy's jaw tightened. "You're in it with me," he said. Time is running out. Kennedy must go public — the question is what he says when he does.`
+};
+
+const ALT_PHASE3_INTROS = {
+  A: `The quarantine is in effect and Kennedy's speech has shaken the world. But the real test is coming: 25 Soviet ships are steaming toward Cuba. Some are cargo vessels that may be carrying missile components. Others are tankers carrying petroleum. And beneath the surface, U.S. sonar has detected four Soviet Foxtrot-class submarines running interference for the convoy. The quarantine line is 500 miles out. The first Soviet ships will reach it within 18 hours. The world is about to find out if anyone blinks.`,
+  B: `The ultimatum's clock has expired, and no Soviet missiles have moved. The world wonders whether Kennedy was bluffing. He wasn't — but now he faces an impossible choice: launch the strikes and risk nuclear war, or let the deadline pass and lose all credibility. McNamara proposes a middle path: implement the quarantine now, immediately, and treat the expired ultimatum as having established "the seriousness of American resolve." Kennedy agrees. Soviet ships are 18 hours from the quarantine line. The Joint Chiefs have placed all forces at DEFCON 2.`,
+  C: `U Thant's proposed standdown is holding — barely. The Soviets have tentatively agreed to pause, but CIA reconnaissance shows the construction sites have not paused at all. Kennedy quietly orders the quarantine implemented anyway, calling it a "precautionary measure consistent with the UN negotiations." The Soviets protest but do not challenge it directly. Soviet ships are approaching the quarantine zone. The diplomatic clock and the military clock are now running simultaneously, and nobody knows which one will hit zero first.`
+};
+
+/* ==========================================================
+   ALTERNATIVE HISTORY — FICTIONAL ENDINGS
+   ========================================================== */
+function calculateAltOutcome() {
+  const c = state.choices;
+  let agg = 0, dip = 0;
+  if (c[1] === 'A') agg += 2;
+  if (c[1] === 'C') dip += 2;
+  if (c[2] === 'B') agg += 2;
+  if (c[2] === 'C') dip += 1;
+  if (c[3] === 'A') agg += 1;
+  if (c[3] === 'C') dip += 1;
+  if (c[4] === 'C') agg += 3;
+  if (c[4] === 'B') dip += 1;
+  if (agg >= 4) return 'escalation';
+  if (dip >= 3 && agg <= 1) return 'diplomatic';
+  return 'near_miss';
+}
+
+const ALT_ENDINGS = {
+  near_miss: {
+    title: 'October 28, 1962 — The Knife\'s Edge',
+    text: `<p>On the morning of October 28th, Radio Moscow broadcasted Khrushchev's reply: the Soviet Union would dismantle its missiles in Cuba. In the White House Situation Room, nobody cheered. Kennedy sat silently for a long moment, then said: "We were lucky. God help us if we have to do this again."</p>
+    <p>He was more right than he knew. Three hundred feet below the Atlantic, Soviet submarine B-59 had spent the last 72 hours being hammered by American depth charges. Her batteries were nearly dead. The air was so foul that men were passing out at their stations. Commander Savitsky, believing the war had already started on the surface, had ordered the nuclear torpedo armed. Two of the three senior officers aboard had approved the launch. The third — Fleet Commodore Vasili Arkhipov — had refused, insisting they surface and make contact with Moscow.</p>
+    <p>They surfaced into sunlight and an American helicopter hovering fifty feet above the waves. Arkhipov climbed the conning tower, blinked in the light, and saw the American sailors staring back at him. Nobody fired. Within hours, the recall order reached them.</p>
+    <p>The Turkey missiles were quietly removed six months later. A hotline was installed between Washington and Moscow. And Vasili Arkhipov went home to his wife, never telling her what he had done, carrying the weight of a world that never knew it owed him everything.</p>`
+  },
+  diplomatic: {
+    title: 'November 1962 — A Different Détente',
+    text: `<p>The deal that emerged from three weeks of agonizing negotiation looked nothing like what either side had expected. The Soviet missiles left Cuba — but so did the American missiles in Turkey, and both removals were announced simultaneously in a joint communiqué from the United Nations. The American press was savage: "KENNEDY TRADES AWAY NATO" ran the headline in the Chicago Tribune. European allies were furious.</p>
+    <p>But something unexpected happened in the months that followed. The transparency of the agreement — the fact that both sides had publicly acknowledged the other's legitimate security concerns — created an opening that had never existed before. A direct telephone hotline was installed between the White House and the Kremlin within weeks, not months. By spring 1963, both nations had agreed to a comprehensive nuclear test ban — not the partial treaty that would have been signed, but a full one.</p>
+    <p>Khrushchev, emboldened by the deal's success, survived the internal Politburo challenge that in another timeline would have removed him from power in 1964. He remained Premier until 1970. The Cuban revolution, legitimized by the international agreement, became a strange bridge between the superpowers rather than a flashpoint.</p>
+    <p>Kennedy won re-election in 1964 — though by a narrower margin than expected. He never visited Dallas.</p>
+    <p>The Cold War still lasted decades. Nuclear weapons were never used. But the path between October 1962 and eventual peace looked very different — a little less dangerous, a little more honest, shaped by the willingness of two leaders to admit publicly what they were both too afraid to admit privately: that they were terrified, and that terror itself could be the beginning of wisdom.</p>`
+  },
+  escalation: {
+    title: 'October 28, 1962 — The Day After',
+    text: `<p>The first strike hit at 6:14 AM Eastern time on October 28th. It was not the Americans who fired first.</p>
+    <p>Three hundred feet beneath the Atlantic, aboard submarine B-59, Commander Valentin Savitsky had been listening to garbled radio fragments for six hours — depth charges shaking the hull, the air thick with carbon dioxide, half his crew unconscious. The last transmission he'd received from Moscow, eighteen hours earlier, had said: "Prepare for all contingencies." He interpreted this as authorization.</p>
+    <p>The nuclear torpedo struck the destroyer USS Beale at 6:14 AM. The warhead — fifteen kilotons, roughly the yield of the Hiroshima bomb — vaporized the Beale, the USS Cony, and damaged three other vessels. 814 American sailors died in the first four seconds.</p>
+    <p>At 6:22 AM, NORAD detected the flash on satellite imagery and classified it as a nuclear detonation. The message reached the White House Situation Room at 6:31 AM. By 6:45, Kennedy had authorized retaliatory strikes against Soviet military installations in Cuba.</p>
+    <p>By 7:30 AM, Soviet Premier Khrushchev — informed that Soviet forces had fired a nuclear weapon without his authorization — faced an impossible choice. His military commanders insisted the American retaliation against Cuba required a response against American bases in Europe. Khrushchev hesitated. For forty-five minutes, the most powerful man in the Soviet Union sat at his desk with his head in his hands.</p>
+    <p>At 8:15 AM, Soviet medium-range missiles launched against U.S. military installations in West Germany and Turkey. NATO's automatic response protocols activated.</p>
+    <p>By noon on October 28th, an estimated 87 nuclear weapons had been detonated across three continents. Washington, Moscow, and dozens of other cities were burning. The death toll in the first twelve hours exceeded forty million people. By the end of the first week, radiation, firestorms, and the collapse of infrastructure would push that number past a hundred million.</p>
+    <p>The war, such as it was, ended not because anyone won, but because the communications systems needed to coordinate further strikes had been destroyed along with the cities they were housed in. By November, surviving military units on both sides were operating autonomously, without orders, many without knowledge of whether their governments still existed.</p>
+    <p>Vasili Arkhipov — the man who, in another version of that morning, might have said no — had said yes. And the world that woke up on October 29th was not the same world that had gone to sleep on October 27th. It would never be the same again.</p>`
+  }
+};
+
 let _pendingChoice = null; // { phase, choice }
 
 function makeChoice(phase, choice) {
@@ -1747,7 +1905,17 @@ function makeChoice(phase, choice) {
   state.choiceLabels[phase] = LABEL_MAP[phase][choice];
   persistState();
 
-  // Show explanation modal
+  // ALTERNATIVE MODE — skip modal, go straight to transition
+  if (state.mode === 'alternative') {
+    const nextScreens = { 1: 'phase2', 2: 'phase3', 3: 'phase4', 4: 'resolution' };
+    state.transition = { phase: phase, nextScreen: nextScreens[phase] };
+    state.screen = 'transition';
+    _pendingChoice = null;
+    render();
+    return;
+  }
+
+  // HISTORICAL MODE — show explanation modal
   const label = LABEL_MAP[phase][choice];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -1795,13 +1963,36 @@ function submitExplanation() {
 function renderTransitionScreen() {
   const tr = state.transition;
   const phase = tr.phase;
+  renderTimeline(phase);
+
+  // ── ALTERNATIVE HISTORY MODE ──
+  if (state.mode === 'alternative') {
+    const key = `${phase}${state.choices[phase]}`;
+    const alt = ALT_TRANSITIONS[key];
+    setRoot(`
+      <div style="max-width:740px; margin:0 auto; padding:30px 0 60px;">
+        <div class="ph-meta" style="color:var(--red);">ALTERNATIVE TIMELINE — PHASE ${phase}</div>
+        <div class="ph-title">${alt.title}</div>
+        <div class="doc" style="border-color:var(--red-dark);">
+          <div class="doc-body" id="alt-text" style="font-size:15px; line-height:1.9;">
+            <p>${alt.text}</p>
+          </div>
+        </div>
+        ${listenBtn('alt-text')}
+        <div style="text-align:center; margin-top:36px;">
+          <button class="continue-btn" onclick="advanceFromTransition()">▶ &nbsp; CONTINUE</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  // ── HISTORICAL MODE ──
   const hist = HISTORICAL[phase];
   const wh = WHAT_HAPPENED[phase];
   const yourChoice = state.choices[phase];
   const yourLabel = state.choiceLabels[phase];
   const matched = (yourChoice === hist.choice);
-
-  renderTimeline(phase);
 
   let comparisonBox;
   if (matched) {
@@ -1848,6 +2039,28 @@ function advanceFromTransition() {
    ========================================================== */
 function renderResolution() {
   renderTimeline(5);
+
+  // ── ALTERNATIVE HISTORY MODE ──
+  if (state.mode === 'alternative') {
+    const outcome = calculateAltOutcome();
+    const ending = ALT_ENDINGS[outcome];
+    setRoot(`
+      <div class="ph-meta" style="color:var(--red);">ALTERNATIVE TIMELINE — RESOLUTION</div>
+      <div class="ph-title">${ending.title}</div>
+      <div class="doc" style="border-color:var(--red-dark);">
+        <div class="doc-body" id="alt-ending" style="font-size:15px; line-height:1.9;">
+          ${ending.text}
+        </div>
+      </div>
+      ${listenBtn('alt-ending')}
+      <div style="text-align:center; margin-top:36px;">
+        <button class="continue-btn" onclick="state.screen='complete'; render();">▶ &nbsp; FINISH</button>
+      </div>
+    `);
+    return;
+  }
+
+  // ── HISTORICAL MODE ──
 
   // Build choice comparison table
   const phases = [
@@ -1975,6 +2188,27 @@ function handleComprehensionInput(value) {
    ========================================================== */
 function renderComplete() {
   renderTimeline(5);
+
+  // In historical mode, mark as completed to unlock alt-history
+  if (state.mode === 'historical') markCompleted();
+
+  // Alt-history mode has no PDF
+  if (state.mode === 'alternative') {
+    setRoot(`
+      <div class="complete-screen">
+        <div class="intro-eyebrow" style="color:var(--red);">ALTERNATIVE HISTORY — SIMULATION COMPLETE</div>
+        <div class="intro-title" style="margin-bottom:10px;">Timeline Closed</div>
+        <div class="intro-sub" style="margin-bottom:30px;">YOUR VERSION OF OCTOBER 1962</div>
+        <div class="intro-body" style="text-align:center;">
+          <p>You've explored one alternative path through the Cuban Missile Crisis. Every choice created a different chain of events — a different world.</p>
+          <p style="color:var(--amber);">Try again with different choices to see how other timelines unfold.</p>
+        </div>
+        <button class="continue-btn" onclick="resetSim()">&#9889; &nbsp; PLAY AGAIN</button>
+      </div>
+    `);
+    return;
+  }
+
   const pdfReady = isPdfReady();
   const pdfErrored = Boolean(window.__jsPdfLoadError);
   const exportAttrs = (!pdfReady || pdfErrored) ? 'disabled aria-disabled=\"true\"' : '';
@@ -1992,6 +2226,7 @@ function renderComplete() {
       <div class="intro-body" style="text-align:center;">
         <p>Your advisory record has been logged. Click below to download a PDF report of your choices, the simulation outcome, and your written analysis.</p>
         <p style="color:var(--amber);">Save this file and submit it to your teacher as directed.</p>
+        <p style="color:var(--green-mid); font-style:italic; margin-top:12px;">&#9889; Alternative History mode has been unlocked. Return to the start screen to try it.</p>
       </div>
       <button class="export-btn" onclick="exportPDF()" ${exportAttrs}>⬇ &nbsp; DOWNLOAD PDF REPORT</button>
       ${pdfStatus}
@@ -2003,7 +2238,7 @@ function renderComplete() {
 
 function resetSim() {
   Object.assign(state, {
-    name: '', screen: 'intro', choices: {}, choiceLabels: {},
+    name: '', screen: 'intro', mode: 'historical', choices: {}, choiceLabels: {},
     explanations: {}, transition: null, rationale: '', comprehension: ''
   });
   clearPersistedState();
