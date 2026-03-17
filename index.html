@@ -828,12 +828,16 @@ const state = {
   explanations: {},     // phase -> student's typed explanation (historical mode)
   transition: null,     // { phase, nextScreen }
   rationale: '',
-  comprehension: ''
+  comprehension: '',
+  // Alt-history adventure state
+  altNode: 'root',
+  altRound: 1,
+  altPath: []
 };
 
 const STORAGE_KEY = 'excomm_state_v1';
 const UNLOCK_KEY = 'excomm_completed_v1';
-const VALID_SCREENS = new Set(['intro', 'phase1', 'transition', 'phase2', 'phase3', 'phase4', 'resolution', 'rationale', 'complete']);
+const VALID_SCREENS = new Set(['intro', 'phase1', 'transition', 'phase2', 'phase3', 'phase4', 'resolution', 'rationale', 'complete', 'alt']);
 
 function isAltUnlocked() {
   try { return localStorage.getItem(UNLOCK_KEY) === 'true'; } catch(e) { return false; }
@@ -854,7 +858,10 @@ function persistState() {
       explanations: state.explanations,
       transition: state.transition,
       rationale: state.rationale,
-      comprehension: state.comprehension
+      comprehension: state.comprehension,
+      altNode: state.altNode,
+      altRound: state.altRound,
+      altPath: state.altPath
     };
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
   } catch (err) {
@@ -882,7 +889,10 @@ function loadPersistedState() {
       explanations: data.explanations ? { ...data.explanations } : {},
       transition: data.transition || null,
       rationale: data.rationale || '',
-      comprehension: data.comprehension || ''
+      comprehension: data.comprehension || '',
+      altNode: data.altNode || 'root',
+      altRound: data.altRound || 1,
+      altPath: data.altPath ? [...data.altPath] : []
     });
   } catch (err) {
     console.warn('Unable to load saved simulation progress.', err);
@@ -1069,6 +1079,7 @@ function render() {
     case 'resolution': renderResolution(); break;
     case 'rationale':  renderRationale();  break;
     case 'complete':   renderComplete();   break;
+    case 'alt':        renderAltAdventure(); break;
   }
 }
 
@@ -1114,7 +1125,10 @@ function startAltSim() {
   }
   state.name = n;
   state.mode = 'alternative';
-  state.screen = 'phase1';
+  state.screen = 'alt';
+  state.altNode = 'root';
+  state.altRound = 1;
+  state.altPath = [];
   render();
 }
 
@@ -1135,11 +1149,9 @@ function startSim() {
    ========================================================== */
 function renderPhase1() {
   renderTimeline(1);
-  const altMode = state.mode === 'alternative';
   setRoot(`
     <div class="ph-meta">TUESDAY, OCTOBER 16, 1962 &nbsp;—&nbsp; 11:45 AM &nbsp;—&nbsp; THE WHITE HOUSE, CABINET ROOM</div>
     <div class="ph-title">Phase One: The Discovery</div>
-    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE — YOUR CHOICES WILL SHAPE WHAT HAPPENS NEXT</div>' : ''}
     <div class="ph-context" id="ph1-context">
       CIA Director John McCone has summoned EXCOMM to an emergency meeting.
       Yesterday's U-2 reconnaissance flight over Cuba has produced photographs
@@ -1330,15 +1342,10 @@ function renderPhase1() {
    ========================================================== */
 function renderPhase2() {
   renderTimeline(2);
-  const altMode = state.mode === 'alternative';
-  const contextText = altMode
-    ? ALT_PHASE2_INTROS[state.choices[1]]
-    : `For three days, EXCOMM meets in grueling, secret sessions in the Cabinet Room. Outside, the country goes about its ordinary life — no one knows. Inside, the arguments rage. The Joint Chiefs push for air strikes and invasion. McNamara argues for a naval blockade. Robert Kennedy warns that a surprise attack on Cuba would make America "the Tojo of the 1960s." Kennedy secretly tape-records the meetings. Meanwhile, U-2 flights confirm construction is accelerating — the Soviets know the secret cannot hold much longer.`;
   setRoot(`
     <div class="ph-meta">WEDNESDAY–FRIDAY, OCTOBER 17–19, 1962 &nbsp;—&nbsp; THE WHITE HOUSE</div>
     <div class="ph-title">Phase Two: The Debate</div>
-    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE</div>' : ''}
-    <div class="ph-context" id="ph2-context">${contextText}</div>
+    <div class="ph-context" id="ph2-context">For three days, EXCOMM meets in grueling, secret sessions in the Cabinet Room. Outside, the country goes about its ordinary life — no one knows. Inside, the arguments rage. The Joint Chiefs push for air strikes and invasion. McNamara argues for a naval blockade. Robert Kennedy warns that a surprise attack on Cuba would make America "the Tojo of the 1960s." Kennedy secretly tape-records the meetings. Meanwhile, U-2 flights confirm construction is accelerating — the Soviets know the secret cannot hold much longer.</div>
     ${listenBtn('ph2-context')}
 
     <!-- EXCOMM MEETING TRANSCRIPT -->
@@ -1427,15 +1434,10 @@ function renderPhase2() {
    ========================================================== */
 function renderPhase3() {
   renderTimeline(3);
-  const altMode = state.mode === 'alternative';
-  const contextText = altMode
-    ? ALT_PHASE3_INTROS[state.choices[2]]
-    : `Kennedy's speech on the evening of October 22nd shocks the nation and the world. He reveals the Soviet missiles to the American public and announces a naval quarantine. "The purpose of these bases," Kennedy declares, "can be none other than to provide a nuclear strike capability against the Western Hemisphere." The quarantine line is drawn 500 miles from Cuba. The U.S. military goes to DEFCON 2 — the highest peacetime readiness in American history. Nuclear-armed B-52 bombers are airborne around the clock. NATO allies are supportive. Khrushchev publicly calls the quarantine "piracy" and "a gross violation of international law." Soviet ships continue toward Cuba.`;
   setRoot(`
     <div class="ph-meta">MONDAY–THURSDAY, OCTOBER 22–25, 1962</div>
     <div class="ph-title">Phase Three: The Quarantine</div>
-    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE</div>' : ''}
-    <div class="ph-context" id="ph3-context">${contextText}</div>
+    <div class="ph-context" id="ph3-context">Kennedy's speech on the evening of October 22nd shocks the nation and the world. He reveals the Soviet missiles to the American public and announces a naval quarantine. "The purpose of these bases," Kennedy declares, "can be none other than to provide a nuclear strike capability against the Western Hemisphere." The quarantine line is drawn 500 miles from Cuba. The U.S. military goes to DEFCON 2 — the highest peacetime readiness in American history. Nuclear-armed B-52 bombers are airborne around the clock. NATO allies are supportive. Khrushchev publicly calls the quarantine "piracy" and "a gross violation of international law." Soviet ships continue toward Cuba.</div>
     ${listenBtn('ph3-context')}
 
     <!-- KENNEDY ADDRESS — IMAGE + AUDIO -->
@@ -1627,11 +1629,9 @@ function renderPhase3() {
    ========================================================== */
 function renderPhase4() {
   renderTimeline(4);
-  const altMode = state.mode === 'alternative';
   setRoot(`
     <div class="ph-meta">SATURDAY, OCTOBER 27, 1962 &nbsp;—&nbsp; "BLACK SATURDAY"</div>
     <div class="ph-title">Phase Four: The Brink</div>
-    ${altMode ? '<div style="font-family:\'Courier New\',monospace; font-size:10px; color:var(--red); letter-spacing:2px; margin-bottom:8px;">ALTERNATIVE TIMELINE</div>' : ''}
     <div class="ph-context" id="ph4-context">
       Everything is happening at once. An American U-2 reconnaissance aircraft has been shot down over Cuba by a Soviet surface-to-air missile. The pilot, Major Rudolf Anderson, is dead — the first American combat fatality of the crisis. A second U-2 has accidentally wandered into Soviet airspace over Alaska, scrambling Soviet MiG fighters. The Joint Chiefs are demanding retaliation. And then — two contradictory letters from Khrushchev arrive within 24 hours of each other, presenting an agonizing dilemma.
     </div>
@@ -1783,119 +1783,314 @@ const WHAT_HAPPENED = {
 };
 
 /* ==========================================================
-   ALTERNATIVE HISTORY — BRANCHING NARRATIVES
+   ALTERNATIVE HISTORY — CHOOSE-YOUR-OWN-ADVENTURE TREE
    ========================================================== */
-const ALT_TRANSITIONS = {
-  '1A': {
-    title: 'The War Room — October 16, 1962',
-    text: `General LeMay slams his fist on the table: "Finally — someone with backbone." Within two hours, the Joint Chiefs begin planning Operation Scabbards — coordinated air strikes targeting all known missile sites, Soviet airfields, and SA-2 anti-aircraft batteries across Cuba. McNamara looks sick. Robert Kennedy catches your eye across the room and mouths: "Pearl Harbor." The planning machinery of the most powerful military on Earth has lurched into motion. It will be very hard to stop.`
+const ALT_TREE = {
+  // ── ROUND 1: THE DISCOVERY ──
+  root: {
+    setting: 'October 16, 1962 — The White House Cabinet Room',
+    narrative: null,
+    prompt: 'U-2 spy planes have photographed Soviet nuclear missile sites under construction in Cuba. The missiles will be operational in 10–14 days. Once armed, they can reach Washington D.C. in 13 minutes. The President turns to you: "What do we do?"',
+    choices: [
+      { label: 'ORDER IMMEDIATE AIR STRIKES', summary: 'Destroy the missile sites before they become operational. The military says it can be done in 48 hours. But Soviet soldiers will die — and Khrushchev will have to respond.', next: 'strike' },
+      { label: 'IMPOSE A NAVAL BLOCKADE', summary: 'Ring Cuba with 180 warships. Stop all Soviet military shipments. It buys time without killing anyone — but the missiles already in Cuba keep getting closer to ready.', next: 'blockade' },
+      { label: 'OPEN SECRET BACK-CHANNEL TALKS', summary: 'Contact Soviet Ambassador Dobrynin privately. Show him the photos. Give Khrushchev a chance to pull the missiles out before this becomes a public confrontation.', next: 'diplomacy' }
+    ]
   },
-  '1B': {
-    title: 'The Quarantine Plan — October 16, 1962',
-    text: `McNamara seizes on your recommendation immediately: "This is the option that doesn't start with killing Russians." The Navy begins planning for what will be the largest naval deployment since World War II — 180 ships forming a ring of steel around Cuba. General LeMay is incandescent: "This is worse than Munich. You're flinching at the moment of truth." The Joint Chiefs formally register their dissent in writing — an extraordinary act. EXCOMM is tearing itself apart, and the Soviets haven't even learned that the Americans know.`
-  },
-  '1C': {
-    title: 'Back-Channel Contact — October 16, 1962',
-    text: `Bobby Kennedy arranges a quiet meeting with Soviet Ambassador Dobrynin at the Justice Department. No aides. No notes. Dobrynin's face goes white when Bobby describes the reconnaissance photos. "I have received no instructions about this," he stammers — and it seems genuine. Khrushchev may have kept even his own ambassador in the dark. But the diplomatic channel, once opened, is fragile. CIA Director McCone warns the President: "Every hour we spend talking, Mr. President, is another hour they spend pouring concrete and arming warheads."`
-  },
-  '2A': {
-    title: 'The Speech — October 22, 1962',
-    text: `One hundred million Americans watch Kennedy reveal the crisis. In Moscow, Khrushchev is dragged from bed. His translator's voice shakes as he reads the English transcript. "He's bluffing," Khrushchev mutters. But privately, he tells Defense Minister Malinovsky: "Begin contingency planning for removal. Not yet — but begin planning." In Havana, Castro goes to full military alert and writes what aides will later call his "Armageddon Letter" to Moscow, urging Khrushchev to launch a nuclear first strike if the Americans invade.`
-  },
-  '2B': {
-    title: 'The Ultimatum — October 22, 1962',
-    text: `The 24-hour ultimatum detonates across the world like a bomb. British Prime Minister Macmillan calls the White House at 3 AM: "Has your President lost his mind?" NATO ambassadors flood the State Department with frantic cables. In Moscow, Khrushchev convenes an emergency Presidium session. Marshal Malinovsky advises that Soviet forces in Cuba should be authorized to use tactical nuclear weapons if invaded. Khrushchev doesn't say no. Castro mobilizes 270,000 Cuban troops and militia. The clock reads 23 hours and counting.`
-  },
-  '2C': {
-    title: 'The Appeal — October 22, 1962',
-    text: `Kennedy's appeal to the United Nations earns international praise — and domestic fury. Senator Richard Russell of Georgia calls the President at midnight: "Mr. President, you look weak, and Khrushchev knows it." The UN's U Thant immediately proposes a two-week standdown. Khrushchev agrees — but CIA reconnaissance shows the Soviets are now working under floodlights, around the clock. They're racing to make the missiles operational before any deal is struck. The diplomatic window and the construction timeline are in a dead sprint against each other.`
-  },
-  '3A': {
-    title: 'The Boarding — October 24, 1962',
-    text: `The USS Joseph P. Kennedy Jr. — named for the President's dead brother — fires a shot across the bow of the Soviet freighter Kimovsk. The Soviet captain refuses to stop. After a thirty-minute standoff, U.S. Marines board at gunpoint. In the hold: missile guidance systems, warhead components, and technical manuals in Russian. Khrushchev goes on Radio Moscow: "The pirates of Washington have committed an act of war." In the deep Atlantic, Soviet submarine B-59 picks up the broadcast on a crackling radio. Commander Savitsky turns to his crew: "It has begun."`
-  },
-  '3B': {
-    title: 'The Blink — October 24, 1962',
-    text: `The Soviet tanker Bucharest approaches the quarantine line. The captain radios that he carries only petroleum. Kennedy orders the Navy to let him through after visual inspection — no boarding. General LeMay throws his cigar at a map in the Pentagon war room. But by nightfall, six more Soviet ships have turned around. Then twelve. Then sixteen. The cargo vessel Kimovsk — the one carrying missile components — makes a wide U-turn in the mid-Atlantic. In the White House Situation Room, someone whispers: "They're blinking." But 42 missiles are still in Cuba, and construction has not stopped.`
-  },
-  '3C': {
-    title: 'The Standdown — October 24, 1962',
-    text: `U.S. Navy ships pull back from the quarantine line. Khrushchev declares victory on Radio Moscow. Within hours, the Soviet cargo vessel Kimovsk — carrying missile guidance components — passes through the now-unguarded quarantine zone and docks at Mariel. CIA photo analysis the next morning confirms the worst: at least six of the MRBM sites are now nearly operational. Senator Russell goes on national television and calls the President "a coward who has traded American security for a photo opportunity at the United Nations." The Joint Chiefs request a private meeting with the Vice President.`
-  },
-  '4A': {
-    title: 'The Gambit — October 27, 1962',
-    text: `RFK calls Dobrynin from a phone booth in Georgetown at 7:42 PM. "Respond to the first letter only," he says. "The Turkey missiles come out in six months — but Anatoly, if this leaks, even from your side, the deal dies and my brother's hands will be tied." Dobrynin cables Moscow within the hour. In the Kremlin, Khrushchev reads the message alone. He stares out the window at the Moscow River for a long time. Then he calls for his secretary: "Take a letter. Address it to the President of the United States." He begins to dictate.`
-  },
-  '4B': {
-    title: 'The Public Offer — October 27, 1962',
-    text: `Kennedy goes on television at 9 PM: "The United States will remove its Jupiter missiles from Turkey within 90 days, in exchange for the complete withdrawal of Soviet offensive weapons from Cuba." NATO headquarters in Brussels erupts. The Turkish ambassador storms out of an emergency session. French President de Gaulle tells aides: "The Americans have sold Europe." But in Moscow, Khrushchev is caught off guard. He expected the Americans to never admit this publicly. He retreats to his dacha to think. Soviet ships halt in the Atlantic. The world holds its breath for a reply that doesn't come for sixteen hours.`
-  },
-  '4C': {
-    title: 'The Retaliation — October 27, 1962',
-    text: `At 2:14 PM, four F-105 Thunderchiefs scream across the Cuban coastline at treetop level and obliterate the SA-2 battery that killed Major Anderson. Twelve Soviet soldiers die in the attack. The explosions are visible from the U.S. naval base at Guantánamo Bay. In Moscow, Marshal Malinovsky picks up a red telephone. In Havana, Castro orders his anti-aircraft batteries to fire on any American aircraft. And 300 feet beneath the surface of the Atlantic, aboard submarine B-59, Captain Savitsky hears a garbled radio transmission through the static: "...strikes confirmed... Soviet casualties..." He turns to his weapons officer.`
-  }
-};
 
-const ALT_PHASE2_INTROS = {
-  A: `The air strike planning is now in its third day. Pentagon war rooms are covered in maps of Cuba. Target lists grow longer by the hour. But a new problem has emerged: CIA analysis reveals that Soviet forces in Cuba may include tactical nuclear weapons — short-range battlefield nukes that Soviet field commanders could launch without orders from Moscow. An invasion force landing on Cuban beaches could be walking into a nuclear inferno. The debate that seemed settled three days ago has cracked wide open. The President demands new options before he addresses the nation.`,
-  B: `The quarantine plan is coming together, but the details are agonizing. How close to Cuba? What if a Soviet ship refuses to stop? What if a Soviet submarine surfaces inside the quarantine zone? McNamara and Admiral Anderson are barely speaking — Anderson believes the Navy knows how to run a blockade and doesn't need a civilian telling him which ships to stop. Meanwhile, CIA imagery shows the construction sites accelerating: the Soviets are now working under floodlights, 24 hours a day. The President has set a deadline — he will speak to the nation on Monday, October 22nd.`,
-  C: `The diplomatic channel is still open but producing nothing. Dobrynin met with Bobby Kennedy twice more — each time, the ambassador looked more shaken, but each time, he repeated the same line: "There are only defensive weapons in Cuba." The CIA intercepts suggest Dobrynin may actually not know. Meanwhile, the President's inner circle is fracturing. General LeMay told the President directly: "You're in a pretty bad fix, Mr. President." Kennedy's jaw tightened. "You're in it with me," he said. Time is running out. Kennedy must go public — the question is what he says when he does.`
-};
+  // ── ROUND 2: CONSEQUENCES OF ROUND 1 ──
+  strike: {
+    setting: 'October 19, 1962 — The Pentagon War Room',
+    narrative: 'At 0600 hours on October 17th, Operation Scabbards launched. 576 sorties hit every known missile site, Soviet airfield, and SA-2 battery across Cuba. The initial damage assessment was encouraging: 80% of known sites destroyed. But the CIA had missed three sites camouflaged in palm groves near Remedios. And the strikes killed 147 Soviet military personnel — the first Soviet combat deaths at American hands since 1920. In Moscow, Khrushchev has gone silent. His ambassador walked out of an emergency UN session without speaking. NATO allies were not warned in advance. The world is holding its breath.',
+    prompt: 'CIA analysts report three surviving missile sites are racing to become operational. Soviet submarines have been detected moving toward Cuba. Khrushchev has not responded — publicly or privately. What now?',
+    choices: [
+      { label: 'LAUNCH A SECOND WAVE — INVADE', summary: 'Send in the Marines. 180,000 troops are staged in Florida. Finish what the air strikes started — take the island and remove every missile by hand.', next: 'strike_invade' },
+      { label: 'HALT AND OFFER NEGOTIATIONS', summary: 'The strikes made our point. Now open communications before this spirals further. Offer Khrushchev a face-saving exit before the surviving missiles go live.', next: 'strike_negotiate' },
+      { label: 'BLOCKADE TO PREVENT REINFORCEMENT', summary: 'Establish a naval quarantine to prevent Soviet resupply while giving diplomacy a chance. The surviving sites are a problem, but invasion risks a much larger war.', next: 'strike_blockade' }
+    ]
+  },
+  blockade: {
+    setting: 'October 24, 1962 — White House Situation Room',
+    narrative: 'Kennedy addressed the nation on October 22nd, revealing the missiles and announcing the quarantine. 100 million Americans watched. In Moscow, Khrushchev called it "piracy." 180 U.S. Navy ships now form a steel ring around Cuba. 25 Soviet vessels are steaming toward the quarantine line — some carrying missile components, some carrying petroleum. Four Soviet submarines are running interference beneath the surface. The first ships will reach the line in six hours. Nobody knows what happens when they get there.',
+    prompt: 'The Soviet freighter Kimovsk — believed to be carrying missile guidance systems — is 30 miles from the quarantine line and has not slowed down. A Soviet Foxtrot-class submarine has been detected shadowing it. What do you recommend?',
+    choices: [
+      { label: 'STOP AND BOARD EVERY SHIP', summary: 'Enforce the blockade completely. Board the Kimovsk and every vessel behind it. If the Soviets won\'t stop, fire warning shots. No exceptions.', next: 'blockade_hard' },
+      { label: 'LET TANKERS THROUGH, STOP CARGO SHIPS', summary: 'Petroleum tankers aren\'t carrying weapons — wave them through. Stop and inspect only cargo vessels suspected of carrying military equipment. Enforce firmly but don\'t provoke unnecessarily.', next: 'blockade_soft' },
+      { label: 'PULL BACK THE LINE TO BUY TIME', summary: 'Move the quarantine line from 500 miles to 800 miles from Cuba. It gives Soviet captains more time to receive new orders from Moscow — and gives Khrushchev more time to blink.', next: 'blockade_pullback' }
+    ]
+  },
+  diplomacy: {
+    setting: 'October 20, 1962 — Department of Justice, Private Office',
+    narrative: 'Bobby Kennedy met Ambassador Dobrynin twice in secret. The first meeting was tense — Dobrynin seemed genuinely shaken by the photos, stammering that he had "no information about this." The second meeting, 48 hours later, produced a crack: Dobrynin admitted privately that "mistakes may have been made" and said Moscow "might be open to discussing the situation." But CIA reconnaissance shows the construction sites have not paused for a single hour. The Soviets are talking and building simultaneously. Congressional leaders are growing suspicious of the President\'s silence.',
+    prompt: 'The back-channel is open but producing no concrete results. The missiles are days from becoming operational. Congressional leaders are demanding to know why the President hasn\'t acted. What do you recommend?',
+    choices: [
+      { label: 'GO PUBLIC — REVEAL AND BLOCKADE', summary: 'The diplomatic window is closing. Address the nation, reveal the missiles, and impose a quarantine. Use the back-channel as leverage, not a substitute for action.', next: 'diplo_public' },
+      { label: 'OFFER A SECRET DEAL', summary: 'Tell Dobrynin directly: remove the missiles, and the U.S. will publicly pledge not to invade Cuba AND quietly remove its Jupiter missiles from Turkey. Give Moscow a concrete reason to say yes.', next: 'diplo_deal' },
+      { label: 'TAKE IT TO THE UN', summary: 'Bring the photos to the UN Security Council. Force a global spotlight on Soviet deception. International pressure may accomplish what private talks have not.', next: 'diplo_un' }
+    ]
+  },
 
-const ALT_PHASE3_INTROS = {
-  A: `The quarantine is in effect and Kennedy's speech has shaken the world. But the real test is coming: 25 Soviet ships are steaming toward Cuba. Some are cargo vessels that may be carrying missile components. Others are tankers carrying petroleum. And beneath the surface, U.S. sonar has detected four Soviet Foxtrot-class submarines running interference for the convoy. The quarantine line is 500 miles out. The first Soviet ships will reach it within 18 hours. The world is about to find out if anyone blinks.`,
-  B: `The ultimatum's clock has expired, and no Soviet missiles have moved. The world wonders whether Kennedy was bluffing. He wasn't — but now he faces an impossible choice: launch the strikes and risk nuclear war, or let the deadline pass and lose all credibility. McNamara proposes a middle path: implement the quarantine now, immediately, and treat the expired ultimatum as having established "the seriousness of American resolve." Kennedy agrees. Soviet ships are 18 hours from the quarantine line. The Joint Chiefs have placed all forces at DEFCON 2.`,
-  C: `U Thant's proposed standdown is holding — barely. The Soviets have tentatively agreed to pause, but CIA reconnaissance shows the construction sites have not paused at all. Kennedy quietly orders the quarantine implemented anyway, calling it a "precautionary measure consistent with the UN negotiations." The Soviets protest but do not challenge it directly. Soviet ships are approaching the quarantine zone. The diplomatic clock and the military clock are now running simultaneously, and nobody knows which one will hit zero first.`
+  // ── ROUND 3: THE CRISIS DEEPENS ──
+  strike_invade: {
+    setting: 'October 22, 1962 — Somewhere Off the Cuban Coast',
+    narrative: 'The invasion began at dawn. 180,000 American troops hit the beaches at three points. Initial resistance was lighter than expected — but then Soviet field commanders activated weapons the CIA had not predicted. Tactical nuclear missiles — short-range Luna rockets with 2-kiloton warheads — had been pre-authorized by Moscow for use against an invasion force. The first one struck a Marine staging area at Tarará Beach. 3,000 American soldiers died in a blinding flash. The mushroom cloud was visible from Miami.',
+    prompt: 'A Soviet tactical nuclear weapon has been used against American forces on Cuban soil. The President has 15 minutes before the Joint Chiefs demand a full nuclear response. What do you recommend?',
+    choices: [
+      { label: 'FULL NUCLEAR RETALIATION', summary: 'The Soviets have used nuclear weapons against American soldiers. Respond in kind — strike Soviet military targets across Cuba, then prepare for a broader exchange if Moscow escalates.', next: 'end_nuclear_war' },
+      { label: 'IMMEDIATE CEASEFIRE OFFER', summary: 'This was a field commander\'s decision, not Moscow\'s. Get on the hotline to Khrushchev NOW. Both sides step back before this becomes the end of everything.', next: 'end_ceasefire' },
+      { label: 'CONVENTIONAL ESCALATION ONLY', summary: 'Respond with overwhelming conventional force — destroy every Soviet position in Cuba — but do NOT use nuclear weapons. Do not give Khrushchev a reason to push the button.', next: 'end_conventional' }
+    ]
+  },
+  strike_negotiate: {
+    setting: 'October 21, 1962 — The White House, Oval Office',
+    narrative: 'The offer to negotiate after the strikes landed like a brick through a window. Khrushchev\'s first public response was savage — "The gangsters of Washington have drawn first blood" — but privately, Ambassador Dobrynin contacted Bobby Kennedy within hours. "The Chairman is... considering his options," Dobrynin said carefully. The three surviving missile sites have stopped construction. Satellite photos show tarps being pulled over the equipment — either camouflage or the beginning of dismantlement. Nobody can tell which.',
+    prompt: 'Khrushchev is signaling through back-channels that he might accept a deal — but his price is steep. He wants the U.S. Jupiter missiles removed from Turkey AND a public American apology for the strikes. The Joint Chiefs say apologizing to the Soviets would be "national humiliation." What do you recommend?',
+    choices: [
+      { label: 'ACCEPT BOTH CONDITIONS', summary: 'The Turkey missiles are obsolete anyway. Swallow the apology. Get the Soviet missiles out of Cuba and end this before something worse happens.', next: 'end_bitter_peace' },
+      { label: 'TURKEY YES, APOLOGY NO', summary: 'Offer to remove the Jupiter missiles — secretly, over six months. But no public apology. America does not apologize for defending itself. Give Khrushchev half of what he wants.', next: 'end_half_deal' },
+      { label: 'REJECT AND THREATEN MORE STRIKES', summary: 'We struck first and we hold the advantage. Tell Khrushchev the remaining sites will be destroyed in 48 hours unless he begins withdrawal immediately. No concessions.', next: 'end_brinkmanship' }
+    ]
+  },
+  strike_blockade: {
+    setting: 'October 24, 1962 — The Atlantic Ocean',
+    narrative: 'The quarantine went into effect 72 hours after the strikes. The combination of military action and blockade has put Khrushchev in an impossible position — his forces in Cuba are battered, his supply lines cut, and the world has seen satellite photos of the destruction on every front page. But the three surviving missile sites are still there, and Soviet technicians are still working. In the UN, most nations have condemned the American strikes. The blockade, however, has broader support. Twelve of 25 Soviet ships have turned back.',
+    prompt: 'Khrushchev sends a private letter through Dobrynin: "We are prepared to discuss removal of the remaining weapons if the United States pledges no further military action against Cuba." It\'s not a yes — but it\'s the first crack. What do you do?',
+    choices: [
+      { label: 'ACCEPT AND NEGOTIATE', summary: 'Take the opening. Pledge no further strikes, no invasion. Get the missiles out through diplomacy now that force has established American seriousness.', next: 'end_force_then_peace' },
+      { label: 'DEMAND MORE — ADD INSPECTIONS', summary: 'Accept the framework but demand on-site UN inspections to verify removal. Trust but verify. Khrushchev\'s word alone isn\'t enough.', next: 'end_inspection_deal' },
+      { label: 'PRESS THE ADVANTAGE — DEMAND UNCONDITIONAL REMOVAL', summary: 'We hold all the cards. No pledges, no concessions. The missiles come out because we say so, or the next wave of strikes finishes the job.', next: 'end_overreach' }
+    ]
+  },
+  blockade_hard: {
+    setting: 'October 25, 1962 — USS Essex, Caribbean Sea',
+    narrative: 'The USS Joseph P. Kennedy Jr. fired a warning shot across the bow of the Kimovsk at 10:32 AM. The Soviet captain ignored it. U.S. Marines boarded at gunpoint. In the hold: crated missile guidance systems and 200 Soviet technicians. The boarding made every front page on Earth. Khrushchev called it "an act of piracy that will not go unanswered." Three hours later, Soviet forces in Berlin closed all access checkpoints to West Berlin — sealing off the city. In the deep Atlantic, submarine B-59 has been depth-charged for 48 hours and has lost all contact with Moscow.',
+    prompt: 'The Soviets have sealed off West Berlin in retaliation. NATO allies are demanding a response. Soviet submarine B-59 has been out of communication for two days. The world is spinning toward a confrontation on two fronts. What do you recommend?',
+    choices: [
+      { label: 'HOLD FIRM ON BOTH FRONTS', summary: 'Maintain the blockade. Demand Berlin checkpoints reopen. Show no weakness on either front — Khrushchev is testing whether we\'ll break.', next: 'end_two_front_crisis' },
+      { label: 'OFFER A TRADE — CUBA FOR BERLIN', summary: 'Privately tell Dobrynin: reopen Berlin and remove the Cuba missiles, and we\'ll remove our Jupiter missiles from Turkey. Link the two crises into one deal.', next: 'end_grand_bargain' },
+      { label: 'FOCUS ON BERLIN — EASE CUBA PRESSURE', summary: 'Berlin is the more dangerous flashpoint — it could trigger a NATO-Warsaw Pact war. Quietly ease enforcement in Cuba to let Khrushchev climb down on Berlin. One crisis at a time.', next: 'end_berlin_first' }
+    ]
+  },
+  blockade_soft: {
+    setting: 'October 26, 1962 — White House Situation Room',
+    narrative: 'The measured approach worked. Tankers passed through unmolested. The cargo ship Marucla was stopped, inspected, and found clean. The Kimovsk — the one carrying missile components — turned around in the mid-Atlantic without ever reaching the line. Sixteen of 25 Soviet ships reversed course. Secretary of State Rusk whispered: "We\'re eyeball to eyeball, and I think the other fellow just blinked." But the missiles already in Cuba are still there, and overnight reconnaissance shows two more sites reaching operational status. Then, at 9 PM, a long, rambling letter arrives from Khrushchev — personal, emotional, clearly written by the Premier himself.',
+    prompt: 'Khrushchev\'s letter proposes a deal: the Soviet Union will remove its missiles if the U.S. pledges not to invade Cuba. But the next morning, a SECOND letter arrives — harder, more formal — demanding the U.S. also remove its Jupiter missiles from Turkey. Which letter do you respond to?',
+    choices: [
+      { label: 'RESPOND TO THE FIRST LETTER ONLY', summary: 'Ignore the second letter as if it never arrived. Accept the terms of the first: no-invasion pledge for missile removal. Quietly handle the Turkey missiles through back-channels later.', next: 'end_trollope_win' },
+      { label: 'ACCEPT BOTH CONDITIONS PUBLICLY', summary: 'Agree to both: no invasion of Cuba AND removal of Turkey missiles. Be transparent. A fair trade that both sides can sell to their people.', next: 'end_public_trade' },
+      { label: 'REJECT BOTH — DEMAND UNCONDITIONAL REMOVAL', summary: 'We have Khrushchev on the ropes. The blockade is working. Don\'t give away anything — demand unconditional withdrawal or the military option goes back on the table.', next: 'end_blockade_hardline' }
+    ]
+  },
+  blockade_pullback: {
+    setting: 'October 25, 1962 — The Kremlin, Moscow',
+    narrative: 'Moving the quarantine line back to 800 miles was interpreted in Moscow as a sign of hesitation. Khrushchev told his Presidium: "The Americans are uncertain. Push harder." Three Soviet ships that had been turning back reversed course and steamed toward Cuba again. The Kimovsk, carrying missile guidance systems, is now 200 miles from Havana and accelerating. Construction on the missile sites has not paused. CIA estimates that four sites will be operational within 72 hours. Congressional leaders have learned about the pullback and are calling it "appeasement."',
+    prompt: 'Your decision to pull back has emboldened the Soviets. Missile components are about to reach Cuba. The sites are days from going live. You\'re running out of time and options. What now?',
+    choices: [
+      { label: 'RE-TIGHTEN THE BLOCKADE IMMEDIATELY', summary: 'Push the line back to 500 miles and enforce aggressively. Stop every ship. The pullback was a mistake — correct it before the Kimovsk reaches port.', next: 'end_scramble' },
+      { label: 'ORDER AIR STRIKES ON THE SITES', summary: 'Diplomacy and half-measures have failed. Destroy the missile sites before they become operational. The blockade buys no more time — only bombs can stop the countdown now.', next: 'end_late_strikes' },
+      { label: 'ACCEPT THE NEW REALITY — NEGOTIATE FROM WEAKNESS', summary: 'The missiles are going to become operational. Accept it. Negotiate from where you are, not where you wish you were. A deal with armed missiles is better than a war over armed missiles.', next: 'end_fait_accompli' }
+    ]
+  },
+  diplo_public: {
+    setting: 'October 25, 1962 — White House Situation Room',
+    narrative: 'Kennedy\'s address combined revelation with restraint. He showed the world the missile photos, announced the quarantine — and then added something unexpected: "We call upon Chairman Khrushchev to join us in stepping back from the abyss. A channel of communication remains open, and we intend to use it." It was a public nod to the secret talks. Dobrynin called Bobby Kennedy within an hour: "The Chairman appreciates the tone." The quarantine went into effect the next morning. Soviet ships are approaching the line.',
+    prompt: 'The back-channel is still alive. Dobrynin has hinted that Khrushchev wants a way out but cannot appear to surrender. Soviet ships are testing the quarantine line. How do you manage both tracks?',
+    choices: [
+      { label: 'ENFORCE FIRMLY, NEGOTIATE PRIVATELY', summary: 'Stop military cargo at the quarantine line. Let Dobrynin know privately that a no-invasion pledge and quiet Turkey removal are on the table — but only if the missiles start coming out this week.', next: 'end_dual_track_win' },
+      { label: 'EASE ENFORCEMENT TO HELP TALKS', summary: 'Wave through borderline ships to keep the temperature low while Dobrynin works Moscow. The back-channel is more valuable than boarding a freighter.', next: 'end_diplo_gamble' },
+      { label: 'SET A 72-HOUR DEADLINE', summary: 'Tell Dobrynin privately: Khrushchev has 72 hours to begin visible dismantlement, or the quarantine becomes a prelude to air strikes. Give the diplomacy a clock.', next: 'end_diplo_deadline' }
+    ]
+  },
+  diplo_deal: {
+    setting: 'October 22, 1962 — Soviet Embassy, Washington D.C.',
+    narrative: 'Bobby Kennedy laid it out for Dobrynin: no invasion of Cuba, removal of Turkey missiles within six months — in exchange for immediate, verifiable withdrawal of all Soviet missiles from Cuba. Dobrynin cabled Moscow within the hour. For 36 excruciating hours, there was no response. Then, at 3 AM on October 22nd, Dobrynin called Bobby at home: "The Chairman finds the general framework... not unacceptable. But he requires one additional element: a public statement from the President acknowledging that American missiles in Turkey were equivalent to Soviet missiles in Cuba." Kennedy\'s advisors are divided. Making that statement would infuriate NATO.',
+    prompt: 'Khrushchev wants the U.S. to publicly acknowledge that its Turkey missiles and Soviet Cuba missiles are "equivalent." This would be a propaganda victory for Moscow and could fracture NATO. But it might end the crisis without a shot fired.',
+    choices: [
+      { label: 'ACCEPT THE EQUIVALENCE STATEMENT', summary: 'Say the words. It\'s technically true — both are offensive missiles close to the other side\'s territory. End the crisis now, manage the NATO fallout later.', next: 'end_equivalence_deal' },
+      { label: 'PROPOSE DIFFERENT LANGUAGE', summary: 'Counter-offer: the President will say both nations have "legitimate security concerns" that can be addressed through negotiation — without explicitly calling the missiles equivalent. Give Khrushchev most of what he wants without the exact words.', next: 'end_wordsmith_deal' },
+      { label: 'REJECT AND GO PUBLIC', summary: 'This is too far. The equivalence argument is Soviet propaganda. Reject it, address the nation tonight, reveal the missiles, and impose the quarantine. The secret deal window has closed.', next: 'end_diplo_collapse' }
+    ]
+  },
+  diplo_un: {
+    setting: 'October 23, 1962 — United Nations Security Council, New York',
+    narrative: 'Ambassador Adlai Stevenson stood before the Security Council and unveiled the U-2 photographs. "Do you, Ambassador Zorin, deny that the USSR has placed and is placing medium and intermediate-range missiles in Cuba? Yes or no? Don\'t wait for the translation — yes or no?" Zorin stammered. The photos went around the world. The Soviet lie was exposed before a global audience. U Thant immediately proposed a cooling-off period. Khrushchev, humiliated, retreated to his dacha and refused calls for 18 hours.',
+    prompt: 'The UN gambit has exposed Soviet deception but Khrushchev has gone dark. U Thant is proposing a two-week standdown. The missiles are still being built. What do you recommend?',
+    choices: [
+      { label: 'ACCEPT U THANT\'S STANDDOWN', summary: 'Two weeks of negotiations with the whole world watching. Khrushchev is embarrassed and may be looking for an exit. Use the time — but insist on a construction freeze as a condition.', next: 'end_un_standdown' },
+      { label: 'IMPOSE THE QUARANTINE NOW', summary: 'The UN spotlight gave us legitimacy. Now back it with force — implement the quarantine while Khrushchev is off-balance. Negotiate from strength, not hope.', next: 'end_un_then_blockade' },
+      { label: 'PUSH FOR A UN RESOLUTION DEMANDING REMOVAL', summary: 'The Soviets are humiliated. Push for a formal Security Council resolution demanding missile withdrawal under threat of collective action. Force the world to take sides.', next: 'end_un_resolution' }
+    ]
+  },
+
+  // ── ENDINGS ──
+  end_nuclear_war: { conclusion: true, title: 'October 22, 1962 — The Last Day',
+    epilogue: `<p>The President authorized nuclear strikes against Soviet military positions in Cuba at 7:14 AM. Fourteen tactical nuclear warheads hit the island within ninety minutes. Havana, untouched by the initial targeting, was engulfed in radioactive fallout by afternoon. Castro, broadcasting from a bunker in the Sierra Maestra, declared that Cuba would "fight to the last drop of blood."</p><p>In Moscow, the Presidium convened for what would be its final session. Marshal Malinovsky presented the targeting packages for American cities. Khrushchev, weeping, signed the authorization at 11:30 AM Moscow time. "God will not forgive us," he whispered. "But history will understand."</p><p>The first Soviet ICBMs hit their targets — Omaha, Nebraska (SAC headquarters) and Washington, D.C. — at 2:47 PM Eastern time. NATO's automatic response protocols launched within minutes. By nightfall, an estimated 200 nuclear warheads had detonated across North America, Europe, and the Soviet Union.</p><p>There was no formal surrender. There was no one left with the authority to surrender. The war lasted less than twelve hours. Its consequences would last for centuries.</p>` },
+
+  end_ceasefire: { conclusion: true, title: 'October 23, 1962 — The Longest Phone Call',
+    epilogue: `<p>Kennedy got on the hotline at 7:02 AM. Khrushchev answered at 7:04. For forty-seven minutes, the two most powerful men on Earth shouted, pleaded, and bargained with the fate of civilization hanging on a telephone wire stretched across the Atlantic.</p><p>"Your field commander used a weapon that belongs to humanity, not to any army," Kennedy said. "Mine will not respond in kind. But I need you to order an immediate ceasefire — all Soviet forces in Cuba, right now — or I cannot control what happens next."</p><p>Khrushchev agreed. Soviet forces in Cuba received the ceasefire order at 8:15 AM. American forces received theirs at 8:22. The silence that followed felt like the world remembering how to breathe.</p><p>The aftermath was devastating. 3,000 American soldiers dead at Tarará Beach. 147 Soviet soldiers killed in the initial air strikes. Radiation from the tactical warhead made a 12-mile stretch of Cuban coastline uninhabitable for decades. Both governments fell within two years — Kennedy lost the 1964 election to Goldwater; Khrushchev was deposed by the Politburo in early 1963.</p><p>But the missiles came out. A hotline was installed. And a Nuclear Weapons Convention — far stronger than anything the real timeline produced — was signed in Geneva in 1964, banning tactical nuclear weapons worldwide. The horror of Tarará Beach ensured that no nuclear weapon was ever used in combat again.</p>` },
+
+  end_conventional: { conclusion: true, title: 'November 1962 — The Long War in Cuba',
+    epilogue: `<p>The conventional counterattack was devastating. Within 72 hours, every Soviet military installation in Cuba was destroyed or overrun. But Cuba was not like any war America had fought before. 270,000 Cuban troops and militia fought with desperate ferocity. The jungles and mountains of the Sierra Maestra became a quagmire that swallowed division after division.</p><p>Khrushchev, denied the excuse of American nuclear first-use, found himself unable to escalate without appearing the aggressor. He withdrew Soviet personnel in December under a face-saving UN arrangement. The missiles were gone — but America was now occupying a hostile island 90 miles from Florida, fighting an insurgency that would last years.</p><p>Castro became a martyr-in-exile, broadcasting from Mexico City. The occupation of Cuba became America\'s first Vietnam — a grinding, unpopular war that consumed Kennedy\'s second term and defined a generation. The missiles were gone. The price was everything else.</p>` },
+
+  end_bitter_peace: { conclusion: true, title: 'November 1962 — The Apology',
+    epilogue: `<p>Kennedy went on national television on November 3rd and delivered the most painful speech of his presidency. "The United States regrets the loss of life resulting from military operations in Cuba. We reaffirm our commitment to resolving disputes through peaceful means." He did not use the word "apology." Khrushchev claimed it was one anyway.</p><p>The Jupiter missiles left Turkey by January. The Soviet missiles left Cuba by December. The deal held. But it cost Kennedy everything — his approval rating dropped thirty points overnight. "He apologized to the Communists" became the rallying cry that put Barry Goldwater in the White House in 1964.</p><p>In Moscow, Khrushchev was hailed as the leader who made America bow. He survived the Politburo challenges that, in another timeline, would have ended his career. The Cold War continued — but the balance of fear had shifted, and everyone knew it.</p>` },
+
+  end_half_deal: { conclusion: true, title: 'December 1962 — The Secret and the Cost',
+    epilogue: `<p>The deal was struck in shadows. Turkey missiles removed over six months. No-invasion pledge delivered through diplomatic channels. No public apology. Khrushchev accepted the half-loaf and ordered the missiles withdrawn.</p><p>But the air strikes could not be un-struck. 147 Soviet graves in Cuban soil became a monument in Moscow — "The Heroes of Cuba." Every October, Pravda published photographs of the destruction. The Cold War grew colder. Arms negotiations, which might have begun in 1963, didn't start until 1972. The test ban treaty was never signed.</p><p>Kennedy won re-election in 1964 on a wave of patriotic support. But he knew, privately, what it had cost. "We hit them first," he told Bobby late one night. "That's what history will remember. Not the deal — the strikes." He was right.</p>` },
+
+  end_brinkmanship: { conclusion: true, title: 'October 24, 1962 — The Silence Before',
+    epilogue: `<p>Khrushchev received the ultimatum — remove the surviving missiles in 48 hours or face a second wave of strikes — and did something nobody in Washington expected. He went on Radio Moscow and released the full text of the ultimatum to the world, alongside photographs of the American destruction in Cuba.</p><p>"The war criminals of Washington are not satisfied with the blood they have already spilled," he declared. "Now they threaten to finish the job."</p><p>World opinion, which had been cautiously sympathetic to America, turned overnight. The UN General Assembly voted 89-12 to condemn the United States. NATO allies began publicly distancing themselves. Kennedy, who had held all the military cards, found himself diplomatically isolated. The 48-hour deadline passed without action — the President could not launch a second strike with the whole world watching.</p><p>The surviving missile sites became operational on October 29th. Soviet nuclear weapons, armed and targeted at American cities, remained in Cuba until a negotiated withdrawal in March 1963 — on Khrushchev's terms.</p>` },
+
+  end_force_then_peace: { conclusion: true, title: 'November 1962 — The Reluctant Peace',
+    epilogue: `<p>The combination of force and diplomacy produced an ugly but functional peace. The no-further-strikes pledge satisfied Khrushchev's need to show Moscow he hadn't simply surrendered. The missiles were withdrawn under UN inspection by December. The three surviving sites were dismantled last.</p><p>It was not a clean victory. The strikes had killed Soviet soldiers, and Moscow's propaganda machine made sure the world never forgot it. But the quarantine had shown restraint, and the negotiation had shown wisdom. Kennedy's reputation survived — barely — as the leader who knew when to stop hitting.</p><p>In Havana, Castro never forgave either superpower for treating his island as a chessboard. Cuba became the most heavily armed non-nuclear state on Earth, a bristling fortress that neither side could ignore. The Cold War went on. But both sides had learned something about the distance between the first punch and the last.</p>` },
+
+  end_inspection_deal: { conclusion: true, title: 'December 1962 — Trust, But Verify',
+    epilogue: `<p>The inspection regime became the crisis after the crisis. Soviet technicians dismantled missiles under the watchful eyes of UN observers — and the constant surveillance of U-2 aircraft overhead. Castro, humiliated by inspectors on his soil, refused to cooperate for weeks. Eventually, Soviet pressure forced his hand.</p><p>By February 1963, every missile was gone. The inspection framework became a model — imperfect, contentious, but real — for arms control agreements that followed. The phrase "trust, but verify" entered the diplomatic lexicon.</p><p>The strikes were not forgotten. But the inspections proved that verification was possible, that enemies could watch each other disarm without firing another shot. It was not the outcome anyone had wanted. It was the outcome the world needed.</p>` },
+
+  end_overreach: { conclusion: true, title: 'October 28, 1962 — The Miscalculation',
+    epilogue: `<p>Khrushchev's offer was rejected. The demand for unconditional removal reached Moscow at 3 AM. Khrushchev read it and turned to Malinovsky: "They want us on our knees." The moderate faction in the Presidium, which had been arguing for compromise, went silent. The hardliners took the floor.</p><p>By dawn, the order went out: Soviet forces in Cuba were authorized to treat any American military action as an act of war and respond accordingly. The tactical nuclear weapons — the Luna rockets that the CIA didn't know about — were armed and targeted at Guantánamo Bay and any invasion beach.</p><p>Kennedy, unaware of how badly he had miscalculated, ordered a second wave of strikes on October 29th. The first American bombs hit at 0600. At 0614, a Luna rocket launched from a palm grove near Trinidad destroyed the airfield at Guantánamo. 2,200 Americans died in the blast. The world was eight minutes from a general nuclear exchange before Khrushchev, horrified by what his own authorization had unleashed, called the White House directly and begged for a ceasefire.</p><p>The ceasefire held. But Guantánamo was gone, and with it, any illusion that nuclear brinkmanship had a safe edge to walk along.</p>` },
+
+  end_two_front_crisis: { conclusion: true, title: 'November 1962 — The Double Game',
+    epilogue: `<p>For eleven days, the world teetered on two edges simultaneously. Soviet tanks sat at the Berlin checkpoints while American destroyers circled Cuba. NATO mobilized along the East German border. The Warsaw Pact went to full alert. Two million soldiers on both sides waited for orders that never came.</p><p>The resolution came not through grand diplomacy but through exhaustion. Khrushchev, unable to sustain confrontations on two fronts, quietly reopened the Berlin checkpoints on November 2nd — claiming "routine maintenance" had been completed. The Cuba quarantine held. The missiles were withdrawn by December under a face-saving UN arrangement.</p><p>No deal was ever officially acknowledged. Both sides simply... stopped. The crisis ended not with a handshake but with a mutual, unspoken agreement that the alternative was too terrible to pursue. It was the most frightening month in human history. Both sides pretended afterward that they had been in control the entire time. Neither had been.</p>` },
+
+  end_grand_bargain: { conclusion: true, title: 'November 1962 — The Package Deal',
+    epilogue: `<p>The deal that ended both crises simultaneously became known as "The Grand Bargain" — though at the time, it felt more like mutual desperation. Cuba missiles out. Turkey missiles out. Berlin checkpoints open. Both sides pledge non-aggression in their respective spheres. All wrapped in a single agreement, signed at the United Nations, broadcast worldwide.</p><p>It was the most comprehensive superpower agreement of the Cold War — and the most controversial. Hawks in Washington called it surrender. Hardliners in Moscow called it retreat. Both were partly right.</p><p>But something shifted in the weeks that followed. A hotline connected the White House and Kremlin. A test ban treaty was signed before Christmas. The world had looked into the abyss across two continents simultaneously and decided, collectively, to step back. The Grand Bargain didn't end the Cold War. But it changed the rules — from a game both sides played to win, to one both sides played to survive.</p>` },
+
+  end_berlin_first: { conclusion: true, title: 'December 1962 — The Slow Unraveling',
+    epilogue: `<p>Easing pressure on Cuba to resolve Berlin first seemed logical in the moment. Berlin was the more dangerous flashpoint — a city where American and Soviet tanks had literally faced each other across a checkpoint. The Berlin situation de-escalated within days once the quarantine pressure eased.</p><p>But the Cuba problem metastasized. With enforcement relaxed, the Kimovsk docked at Mariel and delivered its guidance systems. By November, all missile sites were operational. Soviet nuclear weapons, aimed at American cities, sat 90 miles from Florida for the next four months while increasingly desperate negotiations dragged on.</p><p>The missiles finally left in February 1963, traded for a no-invasion pledge, Turkey missile removal, AND a U.S. agreement to close its listening posts in Iran. Khrushchev, who had achieved far more than he'd originally hoped, declared it "a victory for peace." In Washington, the recriminations lasted years. The lesson was bitter: in a crisis with two fronts, the one you neglect becomes the one that defines your legacy.</p>` },
+
+  end_trollope_win: { conclusion: true, title: 'October 28, 1962 — Morning in Moscow',
+    epilogue: `<p>Kennedy's reply — addressed only to Khrushchev's first, personal letter — arrived in Moscow at dawn. It accepted the terms: a no-invasion pledge for missile withdrawal. The second letter, with its demand for Turkey, was treated as if it had never existed.</p><p>Khrushchev read the reply alone in his study. His hands trembled. He called for his secretary and began dictating the most important broadcast of his life: "The Soviet Government has given instructions for the dismantling of weapons which you call offensive, and their crating and return to the Soviet Union."</p><p>Radio Moscow broadcast the message at 9 AM. In the White House, Kennedy turned to his brother and said: "This is not the time to gloat." Bobby Kennedy had already called Dobrynin: the Turkey missiles would be gone in six months. They were — quietly, without announcement, as if they had simply rusted away.</p><p>No one knew how close it had really been. Beneath the Atlantic, the crew of submarine B-59 had spent their last conscious hours deciding whether to end the world. Fleet Commodore Arkhipov's refusal to authorize the nuclear torpedo would not become public for forty years. By then, most of the men who had nearly died — on all sides — were already gone.</p>` },
+
+  end_public_trade: { conclusion: true, title: 'October 29, 1962 — The Honest Deal',
+    epilogue: `<p>Kennedy went on television at 8 PM: "The United States and the Soviet Union have reached an agreement. Soviet offensive weapons will be removed from Cuba. American Jupiter missiles will be removed from Turkey. Both nations pledge to respect each other's security concerns in their respective regions."</p><p>The reaction was volcanic. NATO allies felt betrayed. Senator Goldwater called it "the greatest act of appeasement since Munich." Khrushchev, for once, said nothing negative — the public acknowledgment of equivalence was more than he had dared hope for.</p><p>But something unexpected grew from the honesty. For the first time, both superpowers had publicly admitted that the other side had legitimate fears. That admission — grudging, painful, politically costly — became the foundation for a different kind of Cold War. Arms talks began in March 1963. A comprehensive test ban was signed by December. The hotline was installed within weeks.</p><p>Kennedy lost twenty points in the polls. He won re-election anyway, by four points, on the argument that honesty in the nuclear age was not weakness — it was the only sane policy. History, eventually, agreed.</p>` },
+
+  end_blockade_hardline: { conclusion: true, title: 'October 29, 1962 — The Bluff Called',
+    epilogue: `<p>Khrushchev's reaction to the rejection was not what anyone expected. He didn't escalate. He didn't respond through the back-channel. He went silent for 72 hours. Soviet ships sat dead in the water, neither advancing nor retreating. Construction in Cuba continued.</p><p>On October 29th, a U-2 was shot down over Cuba. The pilot, Major Rudolf Anderson, was killed. The Joint Chiefs demanded immediate retaliation. Kennedy refused, but he was running out of room. The blockade had worked tactically — no new weapons were getting through — but strategically, 42 missiles were still in Cuba and getting closer to operational every hour.</p><p>The crisis ended not with a deal but with a slow, grinding standoff that lasted until Christmas. The missiles eventually came out — but only after Khrushchev extracted the Turkey removal, a no-invasion pledge, AND American agreement to close two intelligence-gathering stations in Pakistan. Hardline tactics had bought leverage but spent it all on a drawn-out negotiation that cost more than the original deal would have.</p>` },
+
+  end_scramble: { conclusion: true, title: 'October 27, 1962 — The Reversal',
+    epilogue: `<p>The quarantine line snapped back to 500 miles at midnight. The USS Essex moved to intercept the Kimovsk at flank speed. But Khrushchev had used the pullback window masterfully — the Kimovsk was now only 60 miles from Havana, escorted by a Soviet submarine. Stopping it meant a confrontation at close range, with a submarine in the water and Cuban MiG fighters overhead.</p><p>The interception happened at dawn on October 27th. The Kimovsk stopped when the Essex fired warning shots. The submarine surfaced — it was B-59, running on its last battery reserves. Both crews stared at each other across 200 yards of Caribbean water. Nobody fired.</p><p>The boarding found the guidance systems. They were confiscated. But the delay had cost critical days. Two missile sites reached operational status before the crisis resolved in early November. The pullback became the most studied decision of the crisis — a cautionary tale about how hesitation, even well-intentioned, can create the very dangers it seeks to avoid.</p>` },
+
+  end_late_strikes: { conclusion: true, title: 'October 28, 1962 — When Diplomacy Ran Out',
+    epilogue: `<p>The strikes launched at 0500 on October 28th — six days later than the Joint Chiefs had originally wanted, with six fewer days of margin. The delay meant the sites were closer to operational. The strikes had to be more extensive, more destructive. Soviet casualties were higher. The element of surprise was gone — Khrushchev had hardened his positions and dispersed his forces.</p><p>The military damage was done. The missiles were destroyed. But the diplomatic cost was catastrophic. Kennedy had tried diplomacy, tried restraint, tried a pullback — and then struck anyway. To the world, it looked like a man who had exhausted his peaceful options and resorted to violence out of desperation rather than strength. To Moscow, it looked like proof that America could never be trusted to negotiate in good faith.</p><p>The missiles were gone. So was any chance of arms control for a decade. The Cold War's most dangerous chapter ended with the worst possible lesson: that talking was just what you did while you waited for the bombs to be ready.</p>` },
+
+  end_fait_accompli: { conclusion: true, title: 'January 1963 — Living With the Bomb',
+    epilogue: `<p>The Soviet missiles in Cuba became operational on November 1, 1962. For the first time since Hiroshima, nuclear weapons were aimed at American cities from 90 miles away — and there was nothing to be done about it short of starting the war everyone was trying to prevent.</p><p>Kennedy addressed the nation on November 5th. "We must now live in a world where the balance of power has shifted," he said. "But the balance of terror remains. Soviet missiles in Cuba do not change the fundamental reality: any nuclear attack on the United States will be met with total and devastating retaliation." It was a policy of acceptance wrapped in a threat. Deterrence, not victory.</p><p>The missiles stayed for four months. They were eventually traded away in February 1963 for a comprehensive deal: no invasion, Turkey removal, and a mutual pledge to never again station nuclear weapons in the Western Hemisphere. The crisis was over. But for 120 days, America had lived with Soviet nuclear missiles aimed at its cities from 90 miles away — and the psychological impact of that experience reshaped American politics, defense policy, and national identity for a generation.</p>` },
+
+  end_dual_track_win: { conclusion: true, title: 'October 28, 1962 — The Two-Track Solution',
+    epilogue: `<p>The dual-track approach — public firmness and private flexibility — produced its result on the morning of October 28th. The quarantine line held. The back-channel delivered. Khrushchev, given a face-saving exit through the private Turkey assurance, announced on Radio Moscow that the missiles would be withdrawn.</p><p>It was the best possible outcome: no shots fired, no concessions made public, no allies betrayed. The secret deal on Turkey wouldn't surface for decades. Both leaders could claim they had stood firm and won.</p><p>The real victory, though, belonged to the idea that strength and diplomacy weren't opposites — that you could hold a gun and extend a hand at the same time, and that the willingness to do both simultaneously was the only thing standing between October 1962 and the end of the world.</p>` },
+
+  end_diplo_gamble: { conclusion: true, title: 'November 1962 — The Gambler\'s Reward',
+    epilogue: `<p>Easing enforcement to protect the back-channel was a gamble — and it almost didn't pay off. Two additional Soviet cargo ships reached Cuba during the relaxed enforcement period. Congressional leaders leaked the information, and Kennedy faced a firestorm of criticism. For 48 hours, it looked like the President had been played.</p><p>Then Dobrynin delivered. Khrushchev, working through the channel Kennedy had kept alive at such political cost, agreed to full withdrawal. The deal was simpler than anyone expected: no-invasion pledge, quiet Turkey removal, and — Khrushchev's only demand — that the agreement be kept entirely secret. No public statements. No press conferences. Both sides simply acted as if the missiles had never been there.</p><p>It was the most elegant and least satisfying resolution imaginable. Kennedy's critics never knew what he had achieved or how. The diplomat's gamble paid off, but the diplomat got no credit.</p>` },
+
+  end_diplo_deadline: { conclusion: true, title: 'October 26, 1962 — The 72-Hour Clock',
+    epilogue: `<p>Dobrynin blanched when Bobby Kennedy laid out the deadline. "Seventy-two hours is not enough time to—" Bobby cut him off: "It's what we have. After that, my brother's options narrow to one, and neither of us wants to see what that looks like."</p><p>For three days, Moscow worked at a pace that terrified everyone involved. Khrushchev convened four Presidium sessions. Orders flew to Cuba. Construction sites went dark — not because the workers had been told to stop, but because Moscow had recalled the senior engineers. On the 71st hour, Dobrynin called Bobby: "We are prepared to begin dismantlement. We require your pledge and the Turkey arrangement."</p><p>The deadline had worked — but just barely. Kennedy told his inner circle afterward: "Never set a deadline you're not prepared to enforce. We were. That's why it worked." He paused, then added: "And if it hadn't worked, we would be having a very different conversation right now."</p>` },
+
+  end_equivalence_deal: { conclusion: true, title: 'October 24, 1962 — The Words That Changed Everything',
+    epilogue: `<p>Kennedy's statement was carefully worded but unmistakable: "The United States acknowledges that the presence of missiles near another nation's borders is a source of legitimate concern — regardless of which nation those missiles belong to." It stopped short of the word "equivalent." Moscow accepted it as close enough.</p><p>NATO allies were apoplectic. De Gaulle withdrew France from NATO's military command structure — a break that, in another timeline, wouldn't happen until 1966. Turkey's government fell within months. The Western alliance cracked in ways that took a decade to repair.</p><p>But the missiles left Cuba. They left Turkey. And the crisis that might have ended civilization ended instead with a sentence — a carefully chosen, deliberately ambiguous sentence that gave both sides just enough to claim they had not lost. It was, perhaps, the most consequential paragraph in the history of the English language.</p>` },
+
+  end_wordsmith_deal: { conclusion: true, title: 'October 25, 1962 — The Art of Saying Almost Nothing',
+    epilogue: `<p>"Both nations have legitimate security concerns that can and must be addressed through negotiation rather than confrontation." That was the sentence. Fourteen words that took four days to draft, three shouting matches between Kennedy and his speechwriters, and a final 2 AM call to Dobrynin to confirm that Moscow could live with it.</p><p>Khrushchev could tell the Presidium that America had admitted its missiles were a provocation. Kennedy could tell Congress he had made no concession. Both were right. Both were wrong. The missiles came out on both sides. No one claimed victory.</p><p>It was the purest expression of what diplomacy actually is: the art of giving everyone just enough of what they need while giving no one exactly what they want. The world survived because two men agreed to be imprecise.</p>` },
+
+  end_diplo_collapse: { conclusion: true, title: 'October 24, 1962 — The Door That Closed',
+    epilogue: `<p>Kennedy's address revealed the missiles, imposed the quarantine, and made no mention of the back-channel negotiations that had been underway for a week. Dobrynin watched the speech on television at the Soviet Embassy. He called Bobby Kennedy at 11 PM: "You have destroyed the possibility of a quiet resolution. I hope you understand what that means."</p><p>The quarantine went into effect. Soviet ships approached the line. For five days, the crisis played out through public confrontation rather than private negotiation — louder, more dangerous, with less room to maneuver. When Khrushchev's letters finally arrived on October 26th and 27th, the terms were harder than what he had been willing to accept a week earlier. The diplomatic path had raised the price of peace.</p><p>The crisis eventually resolved along the same lines the back-channel had been approaching — no invasion, Turkey missiles removed, missiles withdrawn. But it took an extra week, cost an extra U-2 pilot's life, and brought the world several days closer to the edge than it needed to go. The lesson was painful: a diplomatic opening, once closed, cannot simply be reopened at the same price.</p>` },
+
+  end_un_standdown: { conclusion: true, title: 'November 1962 — The Inspector\'s Report',
+    epilogue: `<p>U Thant's two-week standdown, conditioned on a construction freeze, produced the strangest fortnight of the Cold War. UN inspectors — hastily assembled from neutral nations — arrived in Cuba to verify the freeze. Castro, furious at the intrusion, confined them to a single hotel in Havana and allowed them to visit exactly two of the twenty-three known missile sites.</p><p>CIA reconnaissance filled in the gaps. Construction had slowed but not stopped. At least two sites appeared to be nearing operational status despite the supposed freeze. Kennedy, armed with the evidence, went back to the UN and exposed the violation. Khrushchev, facing public humiliation for a second time, made the calculation that the missiles were costing more than they were worth.</p><p>The withdrawal began on November 8th. It was not the clean resolution anyone had hoped for, but it was a resolution — achieved without a shot fired, under the eyes of the international community. The UN, for one brief moment, had actually worked as intended.</p>` },
+
+  end_un_then_blockade: { conclusion: true, title: 'October 28, 1962 — Legitimacy and Power',
+    epilogue: `<p>The sequence — first the UN exposure, then the quarantine — proved devastating. Khrushchev found himself blockaded by a nation with the moral authority of having gone to the international community first. Every Soviet protest about the quarantine was met with the same response: "We showed you the evidence in open session. You lied. The quarantine is the consequence."</p><p>World opinion, which might have been divided by an American blockade alone, consolidated behind the U.S. position. Even nations sympathetic to the Soviet Union couldn't defend the lies. The quarantine held without serious challenge — no Soviet captain wanted to be the one to defy a blockade that the whole world was watching.</p><p>Khrushchev, boxed in diplomatically and militarily, offered withdrawal terms within six days. The resolution came faster than anyone expected, because the combination of legitimacy and force left Moscow with no good options and no sympathetic audience. It was the template for how crises would be managed for the next thirty years — though it would rarely work as cleanly again.</p>` },
+
+  end_un_resolution: { conclusion: true, title: 'November 1962 — The Vote That Never Came',
+    epilogue: `<p>The push for a formal Security Council resolution demanding missile withdrawal ran headlong into the reality of the Soviet veto. Moscow blocked the resolution on October 25th. Kennedy, who had staked his strategy on the UN process, found himself with international sympathy but no enforceable mechanism.</p><p>The General Assembly passed a non-binding resolution by a vote of 94-11, demanding withdrawal. It was the most lopsided Cold War vote in UN history. Khrushchev dismissed it as "a piece of paper with no army behind it." He was technically right. But the overwhelming vote shifted something in the Kremlin calculus. Being that isolated, that publicly condemned, carried a cost that couldn't be measured in missiles.</p><p>The quarantine was implemented on October 28th — late, but with near-universal international support. The combination of public humiliation and naval pressure produced withdrawal terms by mid-November. The crisis lasted two weeks longer than it might have, but ended with the Soviet Union more isolated and the UN more relevant than either had been before. Whether that trade was worth the extra fourteen days of nuclear danger remained a question that historians would debate for decades.</p>` }
 };
 
 /* ==========================================================
-   ALTERNATIVE HISTORY — FICTIONAL ENDINGS
+   ALTERNATIVE HISTORY MODE — Render & Navigation
    ========================================================== */
-function calculateAltOutcome() {
-  const c = state.choices;
-  let agg = 0, dip = 0;
-  if (c[1] === 'A') agg += 2;
-  if (c[1] === 'C') dip += 2;
-  if (c[2] === 'B') agg += 2;
-  if (c[2] === 'C') dip += 1;
-  if (c[3] === 'A') agg += 1;
-  if (c[3] === 'C') dip += 1;
-  if (c[4] === 'C') agg += 3;
-  if (c[4] === 'B') dip += 1;
-  if (agg >= 4) return 'escalation';
-  if (dip >= 3 && agg <= 1) return 'diplomatic';
-  return 'near_miss';
+function renderAltAdventure() {
+  const node = ALT_TREE[state.altNode];
+  if (!node) { state.screen = 'intro'; render(); return; }
+
+  // Round progress indicator
+  const totalRounds = 3;
+  const round = state.altRound;
+  let progressDots = '';
+  for (let i = 1; i <= totalRounds + 1; i++) {
+    if (i <= round) progressDots += `<span style="color:var(--amber-lit);">&#9679;</span> `;
+    else progressDots += `<span style="color:var(--border);">&#9675;</span> `;
+  }
+
+  // ── CONCLUSION / ENDING NODE ──
+  if (node.conclusion) {
+    setRoot(`
+      <div style="max-width:800px; margin:0 auto; padding:30px 20px;">
+        <div style="text-align:center; margin-bottom:24px;">
+          <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--red); letter-spacing:3px;">&#9888; ALTERNATIVE TIMELINE — CONCLUSION</div>
+          <div style="font-size:12px; color:var(--amber); margin-top:6px;">${progressDots}</div>
+        </div>
+        <div class="doc" style="border-color:var(--red); background:#1a0a0a;">
+          <div class="doc-head" style="color:var(--red);">${esc(node.title)}</div>
+          <div id="alt-epilogue" style="color:var(--amber-lit); line-height:1.8; font-size:15px;">
+            ${node.epilogue}
+          </div>
+        </div>
+        ${listenBtn('alt-epilogue')}
+        <div style="text-align:center; margin-top:30px;">
+          <button class="start-btn" style="background:#1a1200; border-color:var(--amber); color:var(--amber-lit);" onclick="state.screen='intro'; render();">&#8592; &nbsp; RETURN TO MAIN MENU</button>
+          <button class="start-btn" style="background:#0a0a1a; border-color:var(--red); color:var(--red); margin-left:12px;" onclick="startAltSim();">&#9889; &nbsp; TRY A DIFFERENT PATH</button>
+        </div>
+      </div>
+    `);
+    return;
+  }
+
+  // ── CHOICE NODE ──
+  const narrativeHTML = node.narrative
+    ? `<div class="doc" style="border-color:#555;">
+         <div class="doc-head" style="color:var(--amber-lit);">${esc(node.setting)}</div>
+         <div id="alt-narrative" style="color:var(--amber-lit); line-height:1.8; font-size:15px;">
+           <p>${node.narrative}</p>
+         </div>
+       </div>
+       ${listenBtn('alt-narrative')}`
+    : '';
+
+  const choicesHTML = node.choices.map(c => `
+    <button class="option-btn" onclick="makeAltChoice('${c.next}')" style="text-align:left; margin-bottom:10px;">
+      <span style="color:var(--amber-lit); font-weight:bold;">${esc(c.label)}</span><br>
+      <span style="font-size:13px; color:#bbb; font-weight:normal;">${esc(c.summary)}</span>
+    </button>
+  `).join('');
+
+  setRoot(`
+    <div style="max-width:800px; margin:0 auto; padding:30px 20px;">
+      <div style="text-align:center; margin-bottom:24px;">
+        <div style="font-family:'Courier New',monospace; font-size:11px; color:var(--red); letter-spacing:3px;">&#9888; ALTERNATIVE TIMELINE — ROUND ${round}</div>
+        <div style="font-size:12px; color:var(--amber); margin-top:6px;">${progressDots}</div>
+      </div>
+      ${narrativeHTML}
+      <div class="doc" style="border-color:var(--amber); margin-top:20px;">
+        <div class="doc-head" style="color:var(--amber);">&#9762; DECISION POINT</div>
+        <div id="alt-prompt" style="color:var(--amber-lit); line-height:1.8; font-size:15px; margin-bottom:16px;">
+          <p>${node.prompt}</p>
+        </div>
+        ${listenBtn('alt-prompt')}
+        <div style="margin-top:16px;">
+          ${choicesHTML}
+        </div>
+      </div>
+    </div>
+  `);
 }
 
-const ALT_ENDINGS = {
-  near_miss: {
-    title: 'October 28, 1962 — The Knife\'s Edge',
-    text: `<p>On the morning of October 28th, Radio Moscow broadcasted Khrushchev's reply: the Soviet Union would dismantle its missiles in Cuba. In the White House Situation Room, nobody cheered. Kennedy sat silently for a long moment, then said: "We were lucky. God help us if we have to do this again."</p>
-    <p>He was more right than he knew. Three hundred feet below the Atlantic, Soviet submarine B-59 had spent the last 72 hours being hammered by American depth charges. Her batteries were nearly dead. The air was so foul that men were passing out at their stations. Commander Savitsky, believing the war had already started on the surface, had ordered the nuclear torpedo armed. Two of the three senior officers aboard had approved the launch. The third — Fleet Commodore Vasili Arkhipov — had refused, insisting they surface and make contact with Moscow.</p>
-    <p>They surfaced into sunlight and an American helicopter hovering fifty feet above the waves. Arkhipov climbed the conning tower, blinked in the light, and saw the American sailors staring back at him. Nobody fired. Within hours, the recall order reached them.</p>
-    <p>The Turkey missiles were quietly removed six months later. A hotline was installed between Washington and Moscow. And Vasili Arkhipov went home to his wife, never telling her what he had done, carrying the weight of a world that never knew it owed him everything.</p>`
-  },
-  diplomatic: {
-    title: 'November 1962 — A Different Détente',
-    text: `<p>The deal that emerged from three weeks of agonizing negotiation looked nothing like what either side had expected. The Soviet missiles left Cuba — but so did the American missiles in Turkey, and both removals were announced simultaneously in a joint communiqué from the United Nations. The American press was savage: "KENNEDY TRADES AWAY NATO" ran the headline in the Chicago Tribune. European allies were furious.</p>
-    <p>But something unexpected happened in the months that followed. The transparency of the agreement — the fact that both sides had publicly acknowledged the other's legitimate security concerns — created an opening that had never existed before. A direct telephone hotline was installed between the White House and the Kremlin within weeks, not months. By spring 1963, both nations had agreed to a comprehensive nuclear test ban — not the partial treaty that would have been signed, but a full one.</p>
-    <p>Khrushchev, emboldened by the deal's success, survived the internal Politburo challenge that in another timeline would have removed him from power in 1964. He remained Premier until 1970. The Cuban revolution, legitimized by the international agreement, became a strange bridge between the superpowers rather than a flashpoint.</p>
-    <p>Kennedy won re-election in 1964 — though by a narrower margin than expected. He never visited Dallas.</p>
-    <p>The Cold War still lasted decades. Nuclear weapons were never used. But the path between October 1962 and eventual peace looked very different — a little less dangerous, a little more honest, shaped by the willingness of two leaders to admit publicly what they were both too afraid to admit privately: that they were terrified, and that terror itself could be the beginning of wisdom.</p>`
-  },
-  escalation: {
-    title: 'October 28, 1962 — The Day After',
-    text: `<p>The first strike hit at 6:14 AM Eastern time on October 28th. It was not the Americans who fired first.</p>
-    <p>Three hundred feet beneath the Atlantic, aboard submarine B-59, Commander Valentin Savitsky had been listening to garbled radio fragments for six hours — depth charges shaking the hull, the air thick with carbon dioxide, half his crew unconscious. The last transmission he'd received from Moscow, eighteen hours earlier, had said: "Prepare for all contingencies." He interpreted this as authorization.</p>
-    <p>The nuclear torpedo struck the destroyer USS Beale at 6:14 AM. The warhead — fifteen kilotons, roughly the yield of the Hiroshima bomb — vaporized the Beale, the USS Cony, and damaged three other vessels. 814 American sailors died in the first four seconds.</p>
-    <p>At 6:22 AM, NORAD detected the flash on satellite imagery and classified it as a nuclear detonation. The message reached the White House Situation Room at 6:31 AM. By 6:45, Kennedy had authorized retaliatory strikes against Soviet military installations in Cuba.</p>
-    <p>By 7:30 AM, Soviet Premier Khrushchev — informed that Soviet forces had fired a nuclear weapon without his authorization — faced an impossible choice. His military commanders insisted the American retaliation against Cuba required a response against American bases in Europe. Khrushchev hesitated. For forty-five minutes, the most powerful man in the Soviet Union sat at his desk with his head in his hands.</p>
-    <p>At 8:15 AM, Soviet medium-range missiles launched against U.S. military installations in West Germany and Turkey. NATO's automatic response protocols activated.</p>
-    <p>By noon on October 28th, an estimated 87 nuclear weapons had been detonated across three continents. Washington, Moscow, and dozens of other cities were burning. The death toll in the first twelve hours exceeded forty million people. By the end of the first week, radiation, firestorms, and the collapse of infrastructure would push that number past a hundred million.</p>
-    <p>The war, such as it was, ended not because anyone won, but because the communications systems needed to coordinate further strikes had been destroyed along with the cities they were housed in. By November, surviving military units on both sides were operating autonomously, without orders, many without knowledge of whether their governments still existed.</p>
-    <p>Vasili Arkhipov — the man who, in another version of that morning, might have said no — had said yes. And the world that woke up on October 29th was not the same world that had gone to sleep on October 27th. It would never be the same again.</p>`
-  }
-};
+function makeAltChoice(nextNodeId) {
+  state.altPath.push(state.altNode);
+  state.altNode = nextNodeId;
+  state.altRound++;
+  persistState();
+  render();
+}
 
 let _pendingChoice = null; // { phase, choice }
 
@@ -1905,17 +2100,7 @@ function makeChoice(phase, choice) {
   state.choiceLabels[phase] = LABEL_MAP[phase][choice];
   persistState();
 
-  // ALTERNATIVE MODE — skip modal, go straight to transition
-  if (state.mode === 'alternative') {
-    const nextScreens = { 1: 'phase2', 2: 'phase3', 3: 'phase4', 4: 'resolution' };
-    state.transition = { phase: phase, nextScreen: nextScreens[phase] };
-    state.screen = 'transition';
-    _pendingChoice = null;
-    render();
-    return;
-  }
-
-  // HISTORICAL MODE — show explanation modal
+  // Show explanation modal
   const label = LABEL_MAP[phase][choice];
   const overlay = document.createElement('div');
   overlay.className = 'modal-overlay';
@@ -1965,29 +2150,6 @@ function renderTransitionScreen() {
   const phase = tr.phase;
   renderTimeline(phase);
 
-  // ── ALTERNATIVE HISTORY MODE ──
-  if (state.mode === 'alternative') {
-    const key = `${phase}${state.choices[phase]}`;
-    const alt = ALT_TRANSITIONS[key];
-    setRoot(`
-      <div style="max-width:740px; margin:0 auto; padding:30px 0 60px;">
-        <div class="ph-meta" style="color:var(--red);">ALTERNATIVE TIMELINE — PHASE ${phase}</div>
-        <div class="ph-title">${alt.title}</div>
-        <div class="doc" style="border-color:var(--red-dark);">
-          <div class="doc-body" id="alt-text" style="font-size:15px; line-height:1.9;">
-            <p>${alt.text}</p>
-          </div>
-        </div>
-        ${listenBtn('alt-text')}
-        <div style="text-align:center; margin-top:36px;">
-          <button class="continue-btn" onclick="advanceFromTransition()">▶ &nbsp; CONTINUE</button>
-        </div>
-      </div>
-    `);
-    return;
-  }
-
-  // ── HISTORICAL MODE ──
   const hist = HISTORICAL[phase];
   const wh = WHAT_HAPPENED[phase];
   const yourChoice = state.choices[phase];
@@ -2039,28 +2201,6 @@ function advanceFromTransition() {
    ========================================================== */
 function renderResolution() {
   renderTimeline(5);
-
-  // ── ALTERNATIVE HISTORY MODE ──
-  if (state.mode === 'alternative') {
-    const outcome = calculateAltOutcome();
-    const ending = ALT_ENDINGS[outcome];
-    setRoot(`
-      <div class="ph-meta" style="color:var(--red);">ALTERNATIVE TIMELINE — RESOLUTION</div>
-      <div class="ph-title">${ending.title}</div>
-      <div class="doc" style="border-color:var(--red-dark);">
-        <div class="doc-body" id="alt-ending" style="font-size:15px; line-height:1.9;">
-          ${ending.text}
-        </div>
-      </div>
-      ${listenBtn('alt-ending')}
-      <div style="text-align:center; margin-top:36px;">
-        <button class="continue-btn" onclick="state.screen='complete'; render();">▶ &nbsp; FINISH</button>
-      </div>
-    `);
-    return;
-  }
-
-  // ── HISTORICAL MODE ──
 
   // Build choice comparison table
   const phases = [
@@ -2192,23 +2332,6 @@ function renderComplete() {
   // In historical mode, mark as completed to unlock alt-history
   if (state.mode === 'historical') markCompleted();
 
-  // Alt-history mode has no PDF
-  if (state.mode === 'alternative') {
-    setRoot(`
-      <div class="complete-screen">
-        <div class="intro-eyebrow" style="color:var(--red);">ALTERNATIVE HISTORY — SIMULATION COMPLETE</div>
-        <div class="intro-title" style="margin-bottom:10px;">Timeline Closed</div>
-        <div class="intro-sub" style="margin-bottom:30px;">YOUR VERSION OF OCTOBER 1962</div>
-        <div class="intro-body" style="text-align:center;">
-          <p>You've explored one alternative path through the Cuban Missile Crisis. Every choice created a different chain of events — a different world.</p>
-          <p style="color:var(--amber);">Try again with different choices to see how other timelines unfold.</p>
-        </div>
-        <button class="continue-btn" onclick="resetSim()">&#9889; &nbsp; PLAY AGAIN</button>
-      </div>
-    `);
-    return;
-  }
-
   const pdfReady = isPdfReady();
   const pdfErrored = Boolean(window.__jsPdfLoadError);
   const exportAttrs = (!pdfReady || pdfErrored) ? 'disabled aria-disabled=\"true\"' : '';
@@ -2239,7 +2362,8 @@ function renderComplete() {
 function resetSim() {
   Object.assign(state, {
     name: '', screen: 'intro', mode: 'historical', choices: {}, choiceLabels: {},
-    explanations: {}, transition: null, rationale: '', comprehension: ''
+    explanations: {}, transition: null, rationale: '', comprehension: '',
+    altNode: 'root', altRound: 1, altPath: []
   });
   clearPersistedState();
   render();
